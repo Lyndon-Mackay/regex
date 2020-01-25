@@ -1,23 +1,23 @@
 use std::env;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum Symbol {
     Matched(char),
     Branching,
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct Transition {
     next_state_id: u32,
     start_group_id: Option<u32>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum Branch {
     StateId(u32),
     Finish,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 struct State {
     id: u32,
     matching_symbol: Symbol,
@@ -38,8 +38,12 @@ fn main() {
     parse(regex_str);
 }
 
-fn parse(regex_str: &str) {
-    regex(regex_str, vec![], 0);
+fn parse(regex_str: &str) -> std::vec::Vec<State> {
+    let optfsm = regex(regex_str, vec![], 0);
+    match optfsm {
+        Some((fsm, _, _)) => fsm,
+        _ => vec![],
+    }
 }
 
 fn regex(
@@ -214,3 +218,86 @@ fn base(
             | '(' <regex> ')'
 
 */
+#[cfg(test)]
+mod test_super {
+    use super::*;
+    use crate::Branch::StateId;
+    use crate::Symbol::Branching;
+    use crate::Symbol::Matched;
+
+    #[test]
+    fn basic_concat() {
+        let correct = vec![
+            State {
+                id: 0,
+                matching_symbol: Matched('a'),
+                branch_1: StateId(1),
+                branch_2: StateId(1),
+            },
+            State {
+                id: 1,
+                matching_symbol: Matched('b'),
+                branch_1: StateId(2),
+                branch_2: StateId(2),
+            },
+        ];
+
+        assert_eq!(parse("ab"), correct);
+    }
+    #[test]
+    fn basic_kleen_closure() {
+        let correct = vec![
+            State {
+                id: 0,
+                matching_symbol: Matched('a'),
+                branch_1: StateId(1),
+                branch_2: StateId(1),
+            },
+            State {
+                id: 1,
+                matching_symbol: Matched('b'),
+                branch_1: StateId(2),
+                branch_2: StateId(2),
+            },
+            State {
+                id: 2,
+                matching_symbol: Branching,
+                branch_1: StateId(1),
+                branch_2: StateId(3),
+            },
+            State {
+                id: 3,
+                matching_symbol: Matched('c'),
+                branch_1: StateId(4),
+                branch_2: StateId(4),
+            },
+        ];
+
+        assert_eq!(parse("ab*c"), correct);
+    }
+    #[test]
+    fn bracket() {
+        let correct = vec![
+            State {
+                id: 0,
+                matching_symbol: Matched('a'),
+                branch_1: StateId(1),
+                branch_2: StateId(1),
+            },
+            State {
+                id: 1,
+                matching_symbol: Matched('b'),
+                branch_1: StateId(2),
+                branch_2: StateId(2),
+            },
+            State {
+                id: 2,
+                matching_symbol: Matched('c'),
+                branch_1: StateId(3),
+                branch_2: StateId(3),
+            },
+        ];
+
+        assert_eq!(parse("(ab)c"), correct);
+    }
+}
