@@ -5,6 +5,11 @@ enum Symbol {
     Matched(char),
     Branching,
 }
+#[derive(Debug)]
+struct Transition {
+    next_state_id: u32,
+    start_group_id: Option<u32>,
+}
 
 #[derive(Clone, Debug)]
 enum Branch {
@@ -57,7 +62,10 @@ fn term(
     let (mut looped_states, mut looped_chars, mut looped_state_id) =
         factor(remaining_chars, states.clone(), next_state_id)?;
 
-    while !looped_chars.starts_with('|') && looped_chars.chars().count() > 0 {
+    while !looped_chars.starts_with('|')
+        && !looped_chars.starts_with(')')
+        && looped_chars.chars().count() > 0
+    {
         let (result_states, result_chars, result_state_id) =
             factor(looped_chars, looped_states.clone(), looped_state_id)?;
         looped_states = result_states;
@@ -73,48 +81,64 @@ fn factor(
     states: Vec<State>,
     next_state_id: u32,
 ) -> Option<(Vec<State>, &str, u32)> {
-    let (result_current_state, mut result_states, result_chars, result_next_state_id) =
+    let (result_current_state, mut result_states, result_chars, result_transition) =
         base(remaining_chars, states, next_state_id)?;
-
-    //TODO not sure idiomatic and handle quantifiers for brakcets
-    if result_current_state.is_none() {
-        return Some((result_states, result_chars, result_next_state_id));
-    }
-
-    let mut result_current_state = result_current_state?;
 
     match result_chars.chars().next() {
         Some('*') => {
-            let new_branch = State {
-                id: next_state_id,
-                matching_symbol: Symbol::Branching,
-                branch_1: Branch::StateId(result_next_state_id),
-                branch_2: Branch::StateId(result_next_state_id + 1),
-            };
-            result_current_state.id = result_next_state_id;
-            result_states.push(new_branch);
-            result_states.push(result_current_state);
+            let group_start_id = result_transition.start_group_id?;
 
-            println!("{:?}", result_states);
-            Some((result_states, &result_chars[1..], result_next_state_id + 1))
+            let new_branch = State {
+                id: result_transition.next_state_id,
+                matching_symbol: Symbol::Branching,
+                branch_1: Branch::StateId(group_start_id),
+                branch_2: Branch::StateId(result_transition.next_state_id + 1),
+            };
+
+            match result_current_state {
+                Some(nstate) => {
+                    result_states.push(nstate);
+                }
+                _ => {
+                    let mut result_current_state =
+                        result_states.iter_mut().find(|x| x.id == group_start_id)?;
+                    result_current_state.id = group_start_id;
+                }
+            }
+
+            result_states.push(new_branch);
+
+            println!("{:?} *", result_states);
+            Some((
+                result_states,
+                &result_chars[1..],
+                result_transition.next_state_id + 1,
+            ))
         }
         Some('+') => {
             let new_branch = State {
-                id: result_next_state_id,
+                id: result_transition.next_state_id,
                 matching_symbol: Symbol::Branching,
                 branch_1: Branch::StateId(next_state_id),
-                branch_2: Branch::StateId(result_next_state_id + 1),
+                branch_2: Branch::StateId(result_transition.next_state_id + 1),
             };
             result_states.push(new_branch);
             println!("{:?}", result_states);
 
-            Some((result_states, &result_chars[1..], result_next_state_id + 1))
+            Some((
+                result_states,
+                &result_chars[1..],
+                result_transition.next_state_id + 1,
+            ))
         }
         _ => {
-            result_states.push(result_current_state);
+            if let Some(nstate) = result_current_state {
+                result_states.push(nstate)
+            };
+
             println!("{:?}", result_states);
 
-            Some((result_states, result_chars, result_next_state_id))
+            Some((result_states, result_chars, result_transition.next_state_id))
         }
     }
 }
@@ -123,26 +147,36 @@ fn base(
     remaining_chars: &str,
     states: Vec<State>,
     next_state_id: u32,
-) -> Option<(Option<State>, Vec<State>, &str, u32)> {
+) -> Option<(Option<State>, Vec<State>, &str, Transition)> {
     let next_char = remaining_chars.chars().next()?;
 
     match next_char {
         '(' => {
             let (result_states, result_remaining_chars, result_next_state_id) =
                 regex(&remaining_chars[1..], states, next_state_id)?;
-
-            if !remaining_chars.starts_with(')') {
-                return None;
+            if !result_remaining_chars.starts_with(')') {
+                panic!("Fix not ending with )");
             };
 
             Some((
                 None,
                 result_states,
-                result_remaining_chars,
-                result_next_state_id,
+                &result_remaining_chars[1..],
+                Transition {
+                    next_state_id: result_next_state_id,
+                    start_group_id: Some(next_state_id),
+                },
             ))
         }
-        ')' => Some((None, states, &remaining_chars[1..], next_state_id)),
+        ')' => Some((
+            None,
+            states,
+            remaining_chars,
+            Transition {
+                next_state_id,
+                start_group_id: None,
+            },
+        )),
         _ => {
             let branched_to_id = next_state_id + 1;
 
@@ -153,7 +187,15 @@ fn base(
                 branch_2: Branch::StateId(branched_to_id),
             };
 
-            Some((Some(nstate), states, &remaining_chars[1..], branched_to_id))
+            Some((
+                Some(nstate),
+                states,
+                &remaining_chars[1..],
+                Transition {
+                    next_state_id: branched_to_id,
+                    start_group_id: Some(next_state_id),
+                },
+            ))
         }
     }
 }
