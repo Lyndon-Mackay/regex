@@ -94,24 +94,36 @@ fn factor(
 
     match result_chars.chars().next() {
         Some('*') => {
+            /*
+             * Gets the start of the previous group of states if surounded by brackets
+             * Or the previous state if no brackets
+             */
             let group_start_id = result_transition.start_group_id?;
 
+            /*
+             * The new branching state will be inserted before previous machine
+             */
             let new_branch = State {
-                /*id: result_transition.next_state_id,*/
                 id: group_start_id,
                 matching_symbol: Symbol::Branching,
                 branch_1: Branch::StateId(group_start_id + 1),
                 branch_2: Branch::StateId(result_transition.next_state_id + 1),
             };
 
+            /*
+             * Actions now set the states repeated by the encolsure
+             */
             match result_current_state {
+                /* If there was a singular state no "()"s chang to go after the branch state */
                 Some(mut nstate) => {
                     nstate.id = result_transition.next_state_id;
                     nstate.branch_1 = Branch::StateId(group_start_id);
                     nstate.branch_2 = Branch::StateId(group_start_id);
                     result_states.push(nstate);
                 }
+                /* Groups of states caputured by the () */
                 _ => {
+                    /* increament ids and states bracnhed to by 1 to make room for every sate that is going to be in front of the new branching machine */
                     result_states = result_states
                         .into_iter()
                         .map(|x| {
@@ -146,12 +158,26 @@ fn factor(
             ))
         }
         Some('+') => {
+            /*
+             * Gets the start of the previous group of states if surounded by brackets
+             * Or the previous state if no brackets
+             */
+            let group_start_id = result_transition.start_group_id?;
+
+            /* Create new branching machien after expression will branch back to previous group or go to next expression */
+
             let new_branch = State {
                 id: result_transition.next_state_id,
                 matching_symbol: Symbol::Branching,
-                branch_1: Branch::StateId(next_state_id),
+                branch_1: Branch::StateId(group_start_id),
                 branch_2: Branch::StateId(result_transition.next_state_id + 1),
             };
+
+            /* If there is a new state add it */
+            if let Some(nstate) = result_current_state {
+                result_states.push(nstate);
+            };
+
             result_states.push(new_branch);
             println!("{:?}", result_states);
 
@@ -356,5 +382,56 @@ mod test_super {
         ];
 
         assert_eq!(parse("(ab)*c"), correct);
+    }
+
+    #[test]
+    fn basic_plus() {
+        let corrct = vec![
+            State {
+                id: 0,
+                matching_symbol: Matched('a'),
+                branch_1: StateId(1),
+                branch_2: StateId(1),
+            },
+            State {
+                id: 1,
+                matching_symbol: Branching,
+                branch_1: StateId(0),
+                branch_2: StateId(2),
+            },
+        ];
+        assert_eq!(parse("a+"), corrct);
+    }
+
+    #[test]
+    fn plus_bracket() {
+        let correct = vec![
+            State {
+                id: 0,
+                matching_symbol: Matched('a'),
+                branch_1: StateId(1),
+                branch_2: StateId(1),
+            },
+            State {
+                id: 1,
+                matching_symbol: Matched('b'),
+                branch_1: StateId(2),
+                branch_2: StateId(2),
+            },
+            State {
+                id: 2,
+                matching_symbol: Branching,
+                branch_1: StateId(0),
+                branch_2: StateId(3),
+            },
+            State {
+                id: 3,
+                matching_symbol: Matched('c'),
+                branch_1: StateId(4),
+                branch_2: StateId(4),
+            },
+        ];
+
+        assert_eq!(parse("(ab)+c"), correct);
     }
 }
