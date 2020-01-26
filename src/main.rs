@@ -35,13 +35,17 @@ fn main() {
     println!("{:?}", args);
 
     let regex_str = &args[1];
-    parse(regex_str);
+    let fsm = parse(regex_str);
+    println!("{:?}", fsm);
 }
 
 fn parse(regex_str: &str) -> std::vec::Vec<State> {
     let optfsm = regex(regex_str, vec![], 0);
     match optfsm {
-        Some((fsm, _, _)) => fsm,
+        Some((mut fsm, _, _)) => {
+            fsm.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+            fsm
+        }
         _ => vec![],
     }
 }
@@ -93,20 +97,42 @@ fn factor(
             let group_start_id = result_transition.start_group_id?;
 
             let new_branch = State {
-                id: result_transition.next_state_id,
+                /*id: result_transition.next_state_id,*/
+                id: group_start_id,
                 matching_symbol: Symbol::Branching,
-                branch_1: Branch::StateId(group_start_id),
+                branch_1: Branch::StateId(group_start_id + 1),
                 branch_2: Branch::StateId(result_transition.next_state_id + 1),
             };
 
             match result_current_state {
-                Some(nstate) => {
+                Some(mut nstate) => {
+                    nstate.id = result_transition.next_state_id;
+                    nstate.branch_1 = Branch::StateId(group_start_id);
+                    nstate.branch_2 = Branch::StateId(group_start_id);
                     result_states.push(nstate);
                 }
                 _ => {
-                    let mut result_current_state =
-                        result_states.iter_mut().find(|x| x.id == group_start_id)?;
-                    result_current_state.id = group_start_id;
+                    result_states = result_states
+                        .into_iter()
+                        .map(|x| {
+                            if x.id >= group_start_id {
+                                let mut t = x.clone();
+                                t.id += 1;
+
+                                if let Branch::StateId(l) = t.branch_1 {
+                                    t.branch_1 = Branch::StateId(l + 1);
+                                }
+
+                                if let Branch::StateId(l) = t.branch_2 {
+                                    t.branch_2 = Branch::StateId(l + 1);
+                                }
+
+                                t
+                            } else {
+                                x
+                            }
+                        })
+                        .collect::<Vec<State>>();
                 }
             }
 
@@ -255,15 +281,15 @@ mod test_super {
             },
             State {
                 id: 1,
-                matching_symbol: Matched('b'),
+                matching_symbol: Branching,
                 branch_1: StateId(2),
-                branch_2: StateId(2),
+                branch_2: StateId(3),
             },
             State {
                 id: 2,
-                matching_symbol: Branching,
+                matching_symbol: Matched('b'),
                 branch_1: StateId(1),
-                branch_2: StateId(3),
+                branch_2: StateId(1),
             },
             State {
                 id: 3,
@@ -299,5 +325,36 @@ mod test_super {
         ];
 
         assert_eq!(parse("(ab)c"), correct);
+    }
+    #[test]
+    fn bracket_kleene_closure() {
+        let correct = vec![
+            State {
+                id: 0,
+                matching_symbol: Branching,
+                branch_1: StateId(1),
+                branch_2: StateId(3),
+            },
+            State {
+                id: 1,
+                matching_symbol: Matched('a'),
+                branch_1: StateId(2),
+                branch_2: StateId(2),
+            },
+            State {
+                id: 2,
+                matching_symbol: Matched('b'),
+                branch_1: StateId(3),
+                branch_2: StateId(3),
+            },
+            State {
+                id: 3,
+                matching_symbol: Matched('c'),
+                branch_1: StateId(4),
+                branch_2: StateId(4),
+            },
+        ];
+
+        assert_eq!(parse("(ab)*c"), correct);
     }
 }
