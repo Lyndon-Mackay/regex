@@ -42,8 +42,22 @@ fn main() {
 fn parse(regex_str: &str) -> std::vec::Vec<State> {
     let optfsm = regex(regex_str, vec![], 0);
     match optfsm {
-        Some((mut fsm, _, _)) => {
+        Some((mut fsm, _, final_state)) => {
             fsm.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+
+            for x in fsm.iter_mut() {
+                if let Branch::StateId(l) = x.branch_1 {
+                    if l == final_state {
+                        x.branch_1 = Branch::Finish;
+                    }
+                }
+                if let Branch::StateId(l) = x.branch_2 {
+                    if l == final_state {
+                        x.branch_2 = Branch::Finish;
+                    }
+                }
+            }
+
             fsm
         }
         _ => vec![],
@@ -337,7 +351,7 @@ fn base(
 #[cfg(test)]
 mod test_super {
     use super::*;
-    use crate::Branch::StateId;
+    use crate::Branch::*;
     use crate::Symbol::Branching;
     use crate::Symbol::Matched;
 
@@ -353,8 +367,8 @@ mod test_super {
             State {
                 id: 1,
                 matching_symbol: Matched('b'),
-                branch_1: StateId(2),
-                branch_2: StateId(2),
+                branch_1: Finish,
+                branch_2: Finish,
             },
         ];
 
@@ -384,8 +398,8 @@ mod test_super {
             State {
                 id: 3,
                 matching_symbol: Matched('c'),
-                branch_1: StateId(4),
-                branch_2: StateId(4),
+                branch_1: Finish,
+                branch_2: Finish,
             },
         ];
 
@@ -409,8 +423,8 @@ mod test_super {
             State {
                 id: 2,
                 matching_symbol: Matched('c'),
-                branch_1: StateId(3),
-                branch_2: StateId(3),
+                branch_1: Finish,
+                branch_2: Finish,
             },
         ];
 
@@ -440,8 +454,8 @@ mod test_super {
             State {
                 id: 3,
                 matching_symbol: Matched('c'),
-                branch_1: StateId(4),
-                branch_2: StateId(4),
+                branch_1: Finish,
+                branch_2: Finish,
             },
         ];
 
@@ -461,7 +475,7 @@ mod test_super {
                 id: 1,
                 matching_symbol: Branching,
                 branch_1: StateId(0),
-                branch_2: StateId(2),
+                branch_2: Finish,
             },
         ];
         assert_eq!(parse("a+"), corrct);
@@ -491,8 +505,8 @@ mod test_super {
             State {
                 id: 3,
                 matching_symbol: Matched('c'),
-                branch_1: StateId(4),
-                branch_2: StateId(4),
+                branch_1: Finish,
+                branch_2: Finish,
             },
         ];
 
@@ -510,14 +524,14 @@ mod test_super {
             State {
                 id: 1,
                 matching_symbol: Matched('a'),
-                branch_1: StateId(3),
-                branch_2: StateId(3),
+                branch_1: Finish,
+                branch_2: Finish,
             },
             State {
                 id: 2,
                 matching_symbol: Matched('b'),
-                branch_1: StateId(3),
-                branch_2: StateId(3),
+                branch_1: Finish,
+                branch_2: Finish,
             },
         ];
         assert_eq!(parse("a|b"), correct);
@@ -558,8 +572,8 @@ mod test_super {
             State {
                 id: 5,
                 matching_symbol: Matched('d'),
-                branch_1: StateId(6),
-                branch_2: StateId(6),
+                branch_1: Finish,
+                branch_2: Finish,
             },
         ];
         assert_eq!(parse("(ab|bc)d"), correct);
@@ -600,8 +614,8 @@ mod test_super {
             State {
                 id: 5,
                 matching_symbol: Matched('d'),
-                branch_1: StateId(6),
-                branch_2: StateId(6),
+                branch_1: Finish,
+                branch_2: Finish,
             },
         ];
 
