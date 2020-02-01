@@ -57,10 +57,10 @@ fn regex(
 ) -> Option<(Vec<State>, &str, u32)> {
     let group_start_id = next_state_id;
 
-    let (looped_states, looped_chars, looped_state_id) =
+    let (mut looped_states, mut looped_chars, mut looped_state_id) =
         term(remaining_chars, states, next_state_id)?;
 
-    if looped_chars.starts_with('|') {
+    while looped_chars.starts_with('|') {
         println!(
             "group_stard_id {},  loop_state_id {} ",
             group_start_id, looped_state_id
@@ -75,6 +75,9 @@ fn regex(
             branch_2: Branch::StateId(looped_state_id + 1),
         };
 
+        /* Since a disjunction is added before some states ids and branches will be broken incrementing
+         *
+         */
         let mut new_states = result_states
             .into_iter()
             .map(|x| {
@@ -108,7 +111,11 @@ fn regex(
 
         println!(" bar{:?}", new_states);
 
-        return term(result_chars, new_states, result_state_id + 1);
+        /*let result = term(result_chars, new_states, result_state_id + 1)?;*/
+
+        looped_chars = result_chars;
+        looped_states = new_states;
+        looped_state_id = result_state_id + 1;
     }
 
     Some((looped_states, looped_chars, looped_state_id))
@@ -559,5 +566,48 @@ mod test_super {
             },
         ];
         assert_eq!(parse("(ab|bc)d"), correct);
+    }
+    #[test]
+    fn multiple_disjunction() {
+        let correct = vec![
+            State {
+                id: 0,
+                matching_symbol: Branching,
+                branch_1: StateId(1),
+                branch_2: StateId(4),
+            },
+            State {
+                id: 1,
+                matching_symbol: Branching,
+                branch_1: StateId(2),
+                branch_2: StateId(3),
+            },
+            State {
+                id: 2,
+                matching_symbol: Matched('a'),
+                branch_1: StateId(5),
+                branch_2: StateId(5),
+            },
+            State {
+                id: 3,
+                matching_symbol: Matched('b'),
+                branch_1: StateId(5),
+                branch_2: StateId(5),
+            },
+            State {
+                id: 4,
+                matching_symbol: Matched('c'),
+                branch_1: StateId(5),
+                branch_2: StateId(5),
+            },
+            State {
+                id: 5,
+                matching_symbol: Matched('d'),
+                branch_1: StateId(6),
+                branch_2: StateId(6),
+            },
+        ];
+
+        assert_eq!(parse("(a|b|c)d"), correct);
     }
 }
