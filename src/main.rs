@@ -61,10 +61,6 @@ fn regex(
         term(remaining_chars, states, next_state_id)?;
 
     while looped_chars.starts_with('|') {
-        println!(
-            "group_stard_id {},  loop_state_id {} ",
-            group_start_id, looped_state_id
-        );
         let (result_states, result_chars, result_state_id) =
             term(&looped_chars[1..], looped_states.clone(), looped_state_id)?;
 
@@ -137,6 +133,7 @@ fn term(
     let (mut looped_states, mut looped_chars, mut looped_state_id) =
         factor(remaining_chars, states.clone(), next_state_id)?;
 
+    /* Processes all terms until empty or a non term character appears */
     while !looped_chars.starts_with('|')
         && !looped_chars.starts_with(')')
         && looped_chars.chars().count() > 0
