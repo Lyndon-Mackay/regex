@@ -311,6 +311,28 @@ fn base(
                 start_group_id: None,
             },
         )),
+        '\\' => {
+            let escaped_char = remaining_chars.chars().nth(1)?; // next doesnt work not sure why something to do with scope?
+
+            let branched_to_id = next_state_id + 1;
+
+            let nstate = State {
+                id: next_state_id,
+                matching_symbol: Symbol::Matched(escaped_char),
+                branch_1: Branch::StateId(branched_to_id),
+                branch_2: Branch::StateId(branched_to_id),
+            };
+
+            Some((
+                Some(nstate),
+                states,
+                &remaining_chars[2..],
+                Transition {
+                    next_state_id: branched_to_id,
+                    start_group_id: Some(next_state_id),
+                },
+            ))
+        }
         _ => {
             let branched_to_id = next_state_id + 1;
 
