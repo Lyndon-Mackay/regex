@@ -23,7 +23,12 @@ pub struct State {
     branch_2: Branch,
 }
 
-pub fn parse(regex_str: &str) -> std::vec::Vec<State> {
+pub fn parse(regex_str: &str) -> Result<std::vec::Vec<State>, &'static str> {
+    match check_valid_regex(regex_str) {
+        Ok(_) => {}
+        Err(e) => return Err(e),
+    }
+
     let optfsm = regex(regex_str, vec![], 0);
     match optfsm {
         Some((mut fsm, _, final_state)) => {
@@ -42,9 +47,9 @@ pub fn parse(regex_str: &str) -> std::vec::Vec<State> {
                 }
             }
 
-            fsm
+            Ok(fsm)
         }
-        _ => vec![],
+        _ => Err("invalid regex"),
     }
 }
 
@@ -335,6 +340,55 @@ fn base(
     }
 }
 
+fn check_valid_regex(regex_str: &str) -> Result<u8, &'static str> {
+    let count = regex_str.chars().count();
+    if count == 0 {
+        return Err("No regex");
+    } else if count > 1 {
+        let mut last_was_quantifier = false;
+        let mut left_bracket_count = 0;
+        let mut right_bracket_count = 0;
+
+        let slice: Vec<char> = regex_str[..].chars().collect();
+
+        if slice.starts_with(&['(']) {
+            left_bracket_count += 1;
+        } else if slice.starts_with(&[')']) {
+            return Err("invalid bracketing");
+        }
+
+        //check for mismatched bracketing and mutiple consectuive qunatifiers
+        for x in slice.windows(2) {
+            match x {
+                [fst, '('] if *fst != '\\' => {
+                    left_bracket_count += 1;
+                    last_was_quantifier = false;
+                }
+                [fst, ')'] if *fst != '\\' => {
+                    right_bracket_count += 1;
+                    last_was_quantifier = false;
+                }
+                [fst, '+'] | [fst, '*'] if *fst != '\\' => {
+                    if last_was_quantifier {
+                        return Err("nothing to qunatify");
+                    } else {
+                        last_was_quantifier = true;
+                    }
+                }
+                _ => last_was_quantifier = false,
+            }
+            if right_bracket_count > left_bracket_count {
+                return Err("invalid bracketing");
+            }
+        }
+        if right_bracket_count != left_bracket_count {
+            return Err("mismatched number of brackets");
+        }
+    };
+
+    Ok(2) // have to have some return value
+}
+
 /*
 
 <regex> ::= <term> '|' <regex>
@@ -375,7 +429,7 @@ mod test_super {
             },
         ];
 
-        assert_eq!(parse("ab"), correct);
+        assert_eq!(parse("ab").unwrap(), correct);
     }
     #[test]
     fn basic_kleen_closure() {
@@ -406,7 +460,7 @@ mod test_super {
             },
         ];
 
-        assert_eq!(parse("ab*c"), correct);
+        assert_eq!(parse("ab*c").unwrap(), correct);
     }
     #[test]
     fn bracket() {
@@ -431,7 +485,7 @@ mod test_super {
             },
         ];
 
-        assert_eq!(parse("(ab)c"), correct);
+        assert_eq!(parse("(ab)c").unwrap(), correct);
     }
     #[test]
     fn bracket_kleene_closure() {
@@ -462,7 +516,7 @@ mod test_super {
             },
         ];
 
-        assert_eq!(parse("(ab)*c"), correct);
+        assert_eq!(parse("(ab)*c").unwrap(), correct);
     }
 
     #[test]
@@ -481,7 +535,7 @@ mod test_super {
                 branch_2: Finish,
             },
         ];
-        assert_eq!(parse("a+"), corrct);
+        assert_eq!(parse("a+").unwrap(), corrct);
     }
 
     #[test]
@@ -513,7 +567,7 @@ mod test_super {
             },
         ];
 
-        assert_eq!(parse("(ab)+c"), correct);
+        assert_eq!(parse("(ab)+c").unwrap(), correct);
     }
     #[test]
     fn basic_disjunction() {
@@ -537,7 +591,7 @@ mod test_super {
                 branch_2: Finish,
             },
         ];
-        assert_eq!(parse("a|b"), correct);
+        assert_eq!(parse("a|b").unwrap(), correct);
     }
     #[test]
     fn grouped_disjunction() {
@@ -579,7 +633,7 @@ mod test_super {
                 branch_2: Finish,
             },
         ];
-        assert_eq!(parse("(ab|bc)d"), correct);
+        assert_eq!(parse("(ab|bc)d").unwrap(), correct);
     }
     #[test]
     fn multiple_disjunction() {
@@ -622,6 +676,14 @@ mod test_super {
             },
         ];
 
-        assert_eq!(parse("(a|b|c)d"), correct);
+        assert_eq!(parse("(a|b|c)d").unwrap(), correct);
+    }
+    #[test]
+    fn bad_bracketing() {
+        assert!(parse("((a)").is_err())
+    }
+    #[test]
+    fn excess_quantifier() {
+        assert!(parse("a+*").is_err());
     }
 }
