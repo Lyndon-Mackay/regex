@@ -407,10 +407,10 @@ fn check_valid_regex(regex_str: &str) -> Result<u8, &'static str> {
 mod test_super {
 
     use super::*; // appears to do nothing not sure why
-    use crate::nfda::Branch::Finish;
-    use crate::nfda::Branch::StateId;
-    use crate::nfda::Symbol::Branching;
-    use crate::nfda::Symbol::Matched;
+    use crate::ndfa::Branch::Finish;
+    use crate::ndfa::Branch::StateId;
+    use crate::ndfa::Symbol::Branching;
+    use crate::ndfa::Symbol::Matched;
 
     #[test]
     fn basic_concat() {

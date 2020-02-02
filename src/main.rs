@@ -1,6 +1,6 @@
-mod nfda;
+mod ndfa;
 
-use crate::nfda::parse;
+use crate::ndfa::parse;
 use std::env;
 
 fn main() {
