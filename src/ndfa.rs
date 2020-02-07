@@ -15,6 +15,7 @@ enum Branch {
     Finish,
 }
 
+/// single state in a ndfa with an id that should be unqiue but no effort is made to enforce this
 #[derive(Clone, Debug, PartialEq)]
 pub struct State {
     id: u32,
@@ -23,6 +24,11 @@ pub struct State {
     branch_2: Branch,
 }
 
+/// Translates an regex string into an nfda
+///
+///  # Errors
+/// Dupliacte quantifiers such as a+* as the + has nothing to quantify technically still recoverable but undesirable
+/// not having a corresponding left and right bracket
 pub fn parse(regex_str: &str) -> Result<std::vec::Vec<State>, &'static str> {
     match check_valid_regex(regex_str) {
         Ok(_) => {}
@@ -340,6 +346,9 @@ fn base(
     }
 }
 
+/// Checks regex is well formed other provides a (hopefully!) helpful error message
+///
+///
 fn check_valid_regex(regex_str: &str) -> Result<u8, &'static str> {
     let count = regex_str.chars().count();
     if count == 0 {
