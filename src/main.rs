@@ -1,6 +1,9 @@
+mod dfa;
 mod ndfa;
 
+use crate::dfa::convert;
 use crate::ndfa::parse;
+
 use std::env;
 
 fn main() {
@@ -13,6 +16,8 @@ fn main() {
     println!("{:?}", args);
 
     let regex_str = &args[1];
-    let fsm = parse(regex_str);
-    println!("{:?}", fsm);
+    let fsm = parse(regex_str).expect("error:");
+
+    convert(fsm)
+    //println!("{:?}", fsm);
 }
