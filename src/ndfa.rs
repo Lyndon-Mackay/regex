@@ -1,27 +1,27 @@
-#[derive(Clone, Debug, PartialEq)]
-enum Symbol {
+#[derive(Clone, Debug, PartialEq,Eq,Hash)]
+pub enum Symbol {
     Matched(char),
     Branching,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq,Eq,Hash)]
 struct Transition {
     next_state_id: u32,
     start_group_id: Option<u32>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum Branch {
+#[derive(Clone, Debug, PartialEq,Eq,Hash)]
+pub enum Branch {
     StateId(u32),
     Finish,
 }
 
 /// single state in a ndfa with an id that should be unqiue but no effort is made to enforce this
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq,Eq,Hash)]
 pub struct State {
-    id: u32,
-    matching_symbol: Symbol,
-    branch_1: Branch,
-    branch_2: Branch,
+    pub id: u32,
+    pub matching_symbol: Symbol,
+    pub branch_1: Branch,
+    pub branch_2: Branch,
 }
 
 /// Translates an regex string into an nfda
