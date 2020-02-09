@@ -1,8 +1,10 @@
+use crate::ndfa::StateType::Branching;
 use crate::ndfa::parse;
 
 use crate::ndfa::Branch;
 use crate::ndfa::State as NDFAState;
-use crate::ndfa::Symbol;
+use crate::ndfa::StateType;
+use crate::ndfa::StateType::Literal;
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -23,7 +25,7 @@ struct State {
 	tran: Vec<Transition>,
 }
 
-pub fn convert(ndfsm: Vec<NDFAState>) {
+pub fn convert(ndfsm: Vec<NDFAState>) { 
 	let ndfsm: HashMap<u32, NDFAState> =
 		HashMap::from_iter(ndfsm.into_iter().map(|x| (x.id, x.clone())));
 	let fst_ndfa_state = ndfsm.get(&0).unwrap().clone();
@@ -77,7 +79,7 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 
 	intial_dfsm.insert(0, initial_state);
 
-	println!("{:?}", intial_dfsm);
+	println!("{:?}", intial_dfsm); 
 }
 
 fn complete_states(intial_dfsm: &[State], ndfsm: &HashMap<u32, NDFAState>) {
@@ -98,17 +100,14 @@ fn complete_states(intial_dfsm: &[State], ndfsm: &HashMap<u32, NDFAState>) {
 
 		for x in &potential_searched_ids {
 			let current_ndfa = ndfsm.get(&x).unwrap();
+			
+			if let StateType::Literal(c) = current_ndfa.matching_symbol {
 
-			if let Symbol::Matched(c) = current_ndfa.matching_symbol {
 
 
-
-				println!(
-					"{:?} {:?} {:?} ",
-					c, current_ndfa.branch_1, current_ndfa.branch_2
-				);
+				println!( "{:?} {:?} ", c, current_ndfa.branch );
 			}
-		}
+		} 
 		println!("------------");
 	}
 }
@@ -118,31 +117,37 @@ fn traverse(
 	prev_states: &[u32],
 	ndfsm: &HashMap<u32, NDFAState>,
 ) -> Vec<(char, Vec<u32>)> {
-	if let Symbol::Matched(l) = current_ndfa.matching_symbol {
+
+	match &current_ndfa.matching_symbol {
+		Literal(l) =>{
 		let mut traversed_states = prev_states.to_vec();
 		traversed_states.push(current_ndfa.id);
-		vec![(l, traversed_states)]
-	} else {
-		let mut prev_vec = prev_states.to_vec();
-		prev_vec.push(current_ndfa.id);
-		let mut rvec = vec![];
+		vec![(*l, traversed_states)]
 
-		if let Branch::StateId(i) = current_ndfa.branch_1 {
-			if !(prev_states.iter().any(|&x| x == i)) {
-				let nstate = ndfsm.get(&i).unwrap();
-
-				rvec.append(&mut traverse(nstate, &prev_vec, ndfsm));
+		},
+		Branching(br) => {
+			let mut prev_vec = prev_states.to_vec();
+			prev_vec.push(current_ndfa.id);
+			let mut rvec = vec![];
+	
+			if let Branch::StateId(i) = current_ndfa.branch {
+				if !(prev_states.iter().any(|&x| x == i)) {
+					let nstate = ndfsm.get(&i).unwrap();
+	
+					rvec.append(&mut traverse(nstate, &prev_vec, ndfsm));
+				}
 			}
-		}
-
-		if let Branch::StateId(i) = current_ndfa.branch_2 {
-			if !(prev_states.iter().any(|&x| x == i)) {
-				let nstate = ndfsm.get(&i).unwrap();
-
-				rvec.append(&mut traverse(nstate, &prev_vec, ndfsm));
+	
+			if let Branch::StateId(i) = br {
+				if !(prev_states.iter().any(|&x| x == *i)) {
+					let nstate = ndfsm.get(&i).unwrap();
+	
+					rvec.append(&mut traverse(nstate, &prev_vec, ndfsm));
+				}
 			}
+	
+			rvec	
 		}
-
-		rvec
 	}
+
 }

@@ -1,27 +1,79 @@
-#[derive(Clone, Debug, PartialEq,Eq,Hash)]
-pub enum Symbol {
-    Matched(char),
-    Branching,
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum StateType {
+    Literal(char),
+    Branching(Branch),
 }
-#[derive(Debug, PartialEq,Eq,Hash)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 struct Transition {
     next_state_id: u32,
     start_group_id: Option<u32>,
 }
 
-#[derive(Clone, Debug, PartialEq,Eq,Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Branch {
     StateId(u32),
     Finish,
 }
 
 /// single state in a ndfa with an id that should be unqiue but no effort is made to enforce this
-#[derive(Clone, Debug, PartialEq,Eq,Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct State {
     pub id: u32,
-    pub matching_symbol: Symbol,
-    pub branch_1: Branch,
-    pub branch_2: Branch,
+    pub matching_symbol: StateType,
+    pub branch: Branch,
+}
+
+/// State machine creation mehtods note there is currently no way of creating a machine that finishea
+/// an existing state state machine will need to be changed to have an id changed to finish this
+/// is intentional based of use case that on creation of a state machine the finish state will
+/// not be known until all machines are made
+impl State {
+    ///Create amchine that matches on a literal then branches
+    fn new_literal_machine(id: u32, lit: char, branch: u32) -> State {
+        State {
+            id,
+            matching_symbol: StateType::Literal(lit),
+            branch: Branch::StateId(branch),
+        }
+    }
+    /// create a machine that can branch
+    fn new_branching_machine(id: u32, branch_1: u32, branch_2: u32) -> State {
+        State {
+            id,
+            matching_symbol: StateType::Branching(Branch::StateId(branch_2)),
+            branch: Branch::StateId(branch_1),
+        }
+    }
+
+    fn change_state_id_to_final(&mut self, final_state_id: u32) {
+        if let Branch::StateId(l) = self.branch {
+            if l == final_state_id {
+                self.branch = Branch::Finish;
+            }
+        }
+
+        if let StateType::Branching(br) = self.matching_symbol.clone() {
+            if let Branch::StateId(l) = br {
+                if l == final_state_id {
+                    self.matching_symbol = StateType::Branching(Branch::Finish);
+                }
+            }
+        }
+    }
+
+    fn increment_states(&mut self) {
+        self.id += 1;
+
+        if let Branch::StateId(l) = self.branch {
+            self.branch = Branch::StateId(l + 1);
+        }
+
+        if let StateType::Branching(br) = self.matching_symbol.clone() {
+            if let Branch::StateId(l) = br {
+                self.matching_symbol = StateType::Branching(Branch::StateId(l + 1));
+            }
+        }
+    }
 }
 
 /// Translates an regex string into an nfda
@@ -41,16 +93,7 @@ pub fn parse(regex_str: &str) -> Result<std::vec::Vec<State>, &'static str> {
             fsm.sort_unstable_by(|a, b| a.id.cmp(&b.id));
 
             for x in fsm.iter_mut() {
-                if let Branch::StateId(l) = x.branch_1 {
-                    if l == final_state {
-                        x.branch_1 = Branch::Finish;
-                    }
-                }
-                if let Branch::StateId(l) = x.branch_2 {
-                    if l == final_state {
-                        x.branch_2 = Branch::Finish;
-                    }
-                }
+                x.change_state_id_to_final(final_state);
             }
 
             Ok(fsm)
@@ -73,12 +116,8 @@ fn regex(
         let (result_states, result_chars, result_state_id) =
             term(&looped_chars[1..], looped_states.clone(), looped_state_id)?;
 
-        let new_branch = State {
-            id: group_start_id,
-            matching_symbol: Symbol::Branching,
-            branch_1: Branch::StateId(group_start_id + 1),
-            branch_2: Branch::StateId(looped_state_id + 1),
-        };
+        let new_branch =
+            State::new_branching_machine(group_start_id, group_start_id + 1, looped_state_id + 1);
 
         /* Since a disjunction is added before some states ids and branches will be broken incrementing
          *
@@ -90,19 +129,21 @@ fn regex(
                     let mut t = x.clone();
                     t.id += 1;
 
-                    if let Branch::StateId(l) = t.branch_1 {
+                    if let Branch::StateId(l) = t.branch {
                         if l == looped_state_id {
-                            t.branch_1 = Branch::StateId(result_state_id + 1);
+                            t.branch = Branch::StateId(result_state_id + 1);
                         } else {
-                            t.branch_1 = Branch::StateId(l + 1);
+                            t.branch = Branch::StateId(l + 1);
                         }
                     }
-
-                    if let Branch::StateId(l) = t.branch_2 {
-                        if l == looped_state_id {
-                            t.branch_2 = Branch::StateId(result_state_id + 1);
-                        } else {
-                            t.branch_2 = Branch::StateId(l + 1);
+                    if let StateType::Branching(br) = t.matching_symbol.clone() {
+                        if let Branch::StateId(l) = br {
+                            if l == looped_state_id {
+                                t.matching_symbol =
+                                    StateType::Branching(Branch::StateId(result_state_id + 1));
+                            } else {
+                                t.matching_symbol = StateType::Branching(Branch::StateId(l + 1));
+                            }
                         }
                     }
 
@@ -174,22 +215,22 @@ fn factor(
             /*
              * The new branching state will be inserted before previous machine
              */
-            let new_branch = State {
-                id: group_start_id,
-                matching_symbol: Symbol::Branching,
-                branch_1: Branch::StateId(group_start_id + 1),
-                branch_2: Branch::StateId(result_transition.next_state_id + 1),
-            };
+            let new_branch = State::new_branching_machine(
+                group_start_id,
+                group_start_id + 1,
+                result_transition.next_state_id + 1,
+            );
 
             /*
              * Actions now set the states repeated by the encolsure
              */
             match result_current_state {
-                /* If there was a singular state no "()"s chang to go after the branch state */
+                /* If there was a singular state no "()"s change to go after the branch state */
                 Some(mut nstate) => {
-                    nstate.id = result_transition.next_state_id;
-                    nstate.branch_1 = Branch::StateId(group_start_id);
-                    nstate.branch_2 = Branch::StateId(group_start_id);
+                    if let StateType::Literal(_) = nstate.matching_symbol {
+                        nstate.id = result_transition.next_state_id;
+                        nstate.branch = Branch::StateId(group_start_id);
+                    }
                     result_states.push(nstate);
                 }
                 /* Groups of states caputured by the () */
@@ -199,18 +240,9 @@ fn factor(
                         .into_iter()
                         .map(|x| {
                             if x.id >= group_start_id {
-                                let mut t = x.clone();
-                                t.id += 1;
-
-                                if let Branch::StateId(l) = t.branch_1 {
-                                    t.branch_1 = Branch::StateId(l + 1);
-                                }
-
-                                if let Branch::StateId(l) = t.branch_2 {
-                                    t.branch_2 = Branch::StateId(l + 1);
-                                }
-
-                                t
+                                let mut res = x.clone();
+                                res.increment_states();
+                                res
                             } else {
                                 x
                             }
@@ -236,12 +268,11 @@ fn factor(
 
             /* Create new branching machien after expression will branch back to previous group or go to next expression */
 
-            let new_branch = State {
-                id: result_transition.next_state_id,
-                matching_symbol: Symbol::Branching,
-                branch_1: Branch::StateId(group_start_id),
-                branch_2: Branch::StateId(result_transition.next_state_id + 1),
-            };
+            let new_branch = State::new_branching_machine(
+                result_transition.next_state_id,
+                group_start_id,
+                result_transition.next_state_id + 1,
+            );
 
             /* If there is a new state add it */
             if let Some(nstate) = result_current_state {
@@ -306,12 +337,7 @@ fn base(
 
             let branched_to_id = next_state_id + 1;
 
-            let nstate = State {
-                id: next_state_id,
-                matching_symbol: Symbol::Matched(escaped_char),
-                branch_1: Branch::StateId(branched_to_id),
-                branch_2: Branch::StateId(branched_to_id),
-            };
+            let nstate = State::new_literal_machine(next_state_id, escaped_char, branched_to_id);
 
             Some((
                 Some(nstate),
@@ -326,12 +352,7 @@ fn base(
         _ => {
             let branched_to_id = next_state_id + 1;
 
-            let nstate = State {
-                id: next_state_id,
-                matching_symbol: Symbol::Matched(next_char),
-                branch_1: Branch::StateId(branched_to_id),
-                branch_2: Branch::StateId(branched_to_id),
-            };
+            let nstate = State::new_literal_machine(next_state_id, next_char, branched_to_id);
 
             Some((
                 Some(nstate),
@@ -418,23 +439,21 @@ mod test_super {
     use super::*; // appears to do nothing not sure why
     use crate::ndfa::Branch::Finish;
     use crate::ndfa::Branch::StateId;
-    use crate::ndfa::Symbol::Branching;
-    use crate::ndfa::Symbol::Matched;
+    use crate::ndfa::StateType::Branching;
+    use crate::ndfa::StateType::Literal;
 
     #[test]
     fn basic_concat() {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Matched('a'),
-                branch_1: StateId(1),
-                branch_2: StateId(1),
+                matching_symbol: Literal('a'),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Matched('b'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('b'),
+                branch: Finish,
             },
         ];
 
@@ -445,27 +464,23 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Matched('a'),
-                branch_1: StateId(1),
-                branch_2: StateId(1),
+                matching_symbol: Literal('a'),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Branching,
-                branch_1: StateId(2),
-                branch_2: StateId(3),
+                matching_symbol: Branching(StateId(3)),
+                branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Matched('b'),
-                branch_1: StateId(1),
-                branch_2: StateId(1),
+                matching_symbol: Literal('b'),
+                branch: StateId(1),
             },
             State {
                 id: 3,
-                matching_symbol: Matched('c'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('c'),
+                branch: Finish,
             },
         ];
 
@@ -476,103 +491,89 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Matched('a'),
-                branch_1: StateId(1),
-                branch_2: StateId(1),
+                matching_symbol: Literal('a'),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Matched('b'),
-                branch_1: StateId(2),
-                branch_2: StateId(2),
+                matching_symbol: Literal('b'),
+                branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Matched('c'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('c'),
+                branch: Finish,
             },
         ];
 
         assert_eq!(parse("(ab)c").unwrap(), correct);
     }
+
     #[test]
     fn bracket_kleene_closure() {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Branching,
-                branch_1: StateId(1),
-                branch_2: StateId(3),
+                matching_symbol: Branching(StateId(3)),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Matched('a'),
-                branch_1: StateId(2),
-                branch_2: StateId(2),
+                matching_symbol: Literal('a'),
+                branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Matched('b'),
-                branch_1: StateId(3),
-                branch_2: StateId(3),
+                matching_symbol: Literal('b'),
+                branch: StateId(3),
             },
             State {
                 id: 3,
-                matching_symbol: Matched('c'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('c'),
+                branch: Finish,
             },
         ];
 
         assert_eq!(parse("(ab)*c").unwrap(), correct);
     }
-
     #[test]
     fn basic_plus() {
         let corrct = vec![
             State {
                 id: 0,
-                matching_symbol: Matched('a'),
-                branch_1: StateId(1),
-                branch_2: StateId(1),
+                matching_symbol: Literal('a'),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Branching,
-                branch_1: StateId(0),
-                branch_2: Finish,
+                matching_symbol: Branching(Finish),
+                branch: StateId(0),
             },
         ];
         assert_eq!(parse("a+").unwrap(), corrct);
     }
-
     #[test]
     fn plus_bracket() {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Matched('a'),
-                branch_1: StateId(1),
-                branch_2: StateId(1),
+                matching_symbol: Literal('a'),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Matched('b'),
-                branch_1: StateId(2),
-                branch_2: StateId(2),
+                matching_symbol: Literal('b'),
+                branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Branching,
-                branch_1: StateId(0),
-                branch_2: StateId(3),
+                matching_symbol: Branching(StateId(3)),
+                branch: StateId(0),
             },
             State {
                 id: 3,
-                matching_symbol: Matched('c'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('c'),
+                branch: Finish,
             },
         ];
 
@@ -583,21 +584,18 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Branching,
-                branch_1: StateId(1),
-                branch_2: StateId(2),
+                matching_symbol: Branching(StateId(2)),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Matched('a'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('a'),
+                branch: Finish,
             },
             State {
                 id: 2,
-                matching_symbol: Matched('b'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('b'),
+                branch: Finish,
             },
         ];
         assert_eq!(parse("a|b").unwrap(), correct);
@@ -607,39 +605,33 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Branching,
-                branch_1: StateId(1),
-                branch_2: StateId(3),
+                matching_symbol: Branching(StateId(3)),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Matched('a'),
-                branch_1: StateId(2),
-                branch_2: StateId(2),
+                matching_symbol: Literal('a'),
+                branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Matched('b'),
-                branch_1: StateId(5),
-                branch_2: StateId(5),
+                matching_symbol: Literal('b'),
+                branch: StateId(5),
             },
             State {
                 id: 3,
-                matching_symbol: Matched('b'),
-                branch_1: StateId(4),
-                branch_2: StateId(4),
+                matching_symbol: Literal('b'),
+                branch: StateId(4),
             },
             State {
                 id: 4,
-                matching_symbol: Matched('c'),
-                branch_1: StateId(5),
-                branch_2: StateId(5),
+                matching_symbol: Literal('c'),
+                branch: StateId(5),
             },
             State {
                 id: 5,
-                matching_symbol: Matched('d'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('d'),
+                branch: Finish,
             },
         ];
         assert_eq!(parse("(ab|bc)d").unwrap(), correct);
@@ -649,39 +641,33 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Branching,
-                branch_1: StateId(1),
-                branch_2: StateId(4),
+                matching_symbol: Branching(StateId(4)),
+                branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Branching,
-                branch_1: StateId(2),
-                branch_2: StateId(3),
+                matching_symbol: Branching(StateId(3)),
+                branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Matched('a'),
-                branch_1: StateId(5),
-                branch_2: StateId(5),
+                matching_symbol: Literal('a'),
+                branch: StateId(5),
             },
             State {
                 id: 3,
-                matching_symbol: Matched('b'),
-                branch_1: StateId(5),
-                branch_2: StateId(5),
+                matching_symbol: Literal('b'),
+                branch: StateId(5),
             },
             State {
                 id: 4,
-                matching_symbol: Matched('c'),
-                branch_1: StateId(5),
-                branch_2: StateId(5),
+                matching_symbol: Literal('c'),
+                branch: StateId(5),
             },
             State {
                 id: 5,
-                matching_symbol: Matched('d'),
-                branch_1: Finish,
-                branch_2: Finish,
+                matching_symbol: Literal('d'),
+                branch: Finish,
             },
         ];
 
