@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        
+        {
+            "name": "(OSX) Launch",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceRoot}/target/debug/regex",
+            "args": ["(a*b|ac)d","a"],
+            "cwd": "${workspaceRoot}",
+        }
+    ]
+}
