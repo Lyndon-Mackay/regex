@@ -39,7 +39,6 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 		tran: vec![],
 	};
 
-	next_state_id += 1;
 
 	let mut intial_dfsm: Vec<State> = vec![];
 
@@ -77,7 +76,7 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 		});
 	}
 	println!();
-	intial_dfsm.append(&mut complete_states(next_state_id, &intial_dfsm, &ndfsm));
+	intial_dfsm = complete_states(next_state_id, &intial_dfsm, &ndfsm);
 
 	intial_dfsm.push(initial_state);
 	intial_dfsm.sort_by(|a, b| a.id.cmp(&b.id));
@@ -102,7 +101,6 @@ fn complete_states(
 		if dfsm.is_empty() {
 			println!("return");
 			let mut returned_dfsm = returned_dfsm.clone();
-			returned_dfsm.sort_by(|a, b| a.id.cmp(&b.id));
 			return returned_dfsm;
 		}
 
@@ -165,6 +163,7 @@ fn complete_states(
 
 			let existingState = dfsm.iter().position(|x| 
 				x.ndfsa_ids.iter().zip(v.iter()).all(|(a,b)| a ==b ));
+
 			match existingState {
 				Some(_) => (),
 				None => 
