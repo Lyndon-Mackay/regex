@@ -126,7 +126,7 @@ fn regex(
             .into_iter()
             .map(|x| {
                 if x.id >= group_start_id {
-                    let mut t = x.clone();
+                    let mut t = x;
                     t.id += 1;
 
                     if let Branch::StateId(l) = t.branch {
@@ -179,7 +179,7 @@ fn term(
     }
 
     let (mut looped_states, mut looped_chars, mut looped_state_id) =
-        factor(remaining_chars, states.clone(), next_state_id)?;
+        factor(remaining_chars, states, next_state_id)?;
 
     /* Processes all terms until empty or a non term character appears */
     while !looped_chars.starts_with('|')
@@ -240,7 +240,7 @@ fn factor(
                         .into_iter()
                         .map(|x| {
                             if x.id >= group_start_id {
-                                let mut res = x.clone();
+                                let mut res = x;
                                 res.increment_states();
                                 res
                             } else {
