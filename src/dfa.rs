@@ -1,11 +1,10 @@
 use crate::ndfa::StateType::Branching;
-
-use crate::ndfa::Branch;
-use crate::ndfa::State as NDFAState;
-use crate::ndfa::StateType;
 use crate::ndfa::StateType::Literal;
 
-use std::collections::{btree_map, BTreeMap, HashMap};
+use crate::ndfa::State as NDFAState;
+use crate::ndfa::*;
+
+use std::collections::{BTreeMap, HashMap};
 
 use std::iter::FromIterator;
 
@@ -21,6 +20,24 @@ struct IntermediateState {
     ndfsa_ids: Vec<u32>,
     consumed_chars: Vec<char>, /* Chars that simply return to the current state */
     tran: Vec<IntermediateTransition>,
+}
+
+impl IntermediateState {
+    fn new(
+        next_state_id: &mut u32,
+        ndfsa_ids: Vec<u32>,
+        consumed_chars: Vec<char>,
+        tran: Vec<IntermediateTransition>,
+    ) -> IntermediateState {
+        let nstate = IntermediateState {
+            id: *next_state_id,
+            ndfsa_ids,
+            consumed_chars,
+            tran,
+        };
+        *next_state_id += 1;
+        nstate
+    }
 }
 
 #[derive(Debug)]
@@ -41,12 +58,7 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 
     let mut next_state_id = 0;
     //initial state for dfa
-    let mut initial_state = IntermediateState {
-        id: next_state_id,
-        ndfsa_ids: vec![],
-        consumed_chars: vec![],
-        tran: vec![],
-    };
+    let mut initial_state = IntermediateState::new(&mut next_state_id, vec![], vec![], vec![]);
 
     for x in &ndfsm {
         println!("{:?}", x);
@@ -70,8 +82,6 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 
     /* Consolidate all paths by character  */
     for (k, v) in &super_states {
-        next_state_id += 1;
-
         let n_transition = IntermediateTransition {
             matched: *k,
             id: v.clone(),
@@ -81,15 +91,15 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 
         println!("{:?} {:?} ", k, v);
 
-        intial_dfsm.push(IntermediateState {
-            id: next_state_id,
-            ndfsa_ids: v.clone(),
-            consumed_chars: vec![],
-            tran: vec![],
-        });
+        intial_dfsm.push(IntermediateState::new(
+            &mut next_state_id,
+            v.clone(),
+            vec![],
+            vec![],
+        ));
     }
     println!();
-    intial_dfsm = complete_intermediate_states(next_state_id, &intial_dfsm, &ndfsm);
+    intial_dfsm = complete_intermediate_states(&mut next_state_id, &intial_dfsm, &ndfsm);
 
     intial_dfsm.push(initial_state);
     intial_dfsm.sort_by(|a, b| a.id.cmp(&b.id));
@@ -110,7 +120,7 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 fn intermediate_to_final(inter_dfsm: Vec<IntermediateState>) -> HashMap<u32, State> {
     let mut final_dfsm: HashMap<u32, State> = HashMap::new();
 
-    let mut next_stateid = 0;
+    let mut next_state_id = 0;
 
     for s in inter_dfsm.clone() {
         let dfsa_trans = s
@@ -130,8 +140,8 @@ fn intermediate_to_final(inter_dfsm: Vec<IntermediateState>) -> HashMap<u32, Sta
             tran: dfsa_trans,
         };
 
-        final_dfsm.insert(next_stateid, new_state);
-        next_stateid += 1;
+        final_dfsm.insert(next_state_id, new_state);
+        next_state_id += 1;
     }
     final_dfsm
 }
@@ -141,7 +151,7 @@ fn intermediate_to_final(inter_dfsm: Vec<IntermediateState>) -> HashMap<u32, Sta
 */
 
 fn complete_intermediate_states(
-    next_state_id: u32,
+    mut next_state_id: &mut u32,
     intial_dfsm: &[IntermediateState],
     ndfsm: &HashMap<u32, NDFAState>,
 ) -> Vec<IntermediateState> {
@@ -150,8 +160,6 @@ fn complete_intermediate_states(
     let mut returned_dfsm = Vec::new();
 
     println!("initial id {:?}", next_state_id);
-
-    let mut next_state_id = next_state_id;
 
     loop {
         if dfsm.is_empty() {
@@ -221,22 +229,25 @@ fn complete_intermediate_states(
 
             let existing_state = dfsm.iter().position(|x| x.ndfsa_ids.eq(v));
 
-            next_state_id += 1;
-
             /* if no intermediate deterministic state exists add one */
             match existing_state {
                 Some(_) => (),
-                None => dfsm.push(IntermediateState {
-                    id: next_state_id,
-                    ndfsa_ids: v.clone(),
-                    consumed_chars: vec![],
-                    tran: vec![],
-                }),
+                None => dfsm.push(IntermediateState::new(
+                    &mut next_state_id,
+                    v.clone(),
+                    vec![],
+                    vec![],
+                )),
             }
         }
         returned_dfsm.push(current_dfa);
     }
 }
+
+/**
+ * Handles ndfsa that loop back to each to make an equivilant intermediate state
+ * that has looping built in
+ */
 
 fn create_looping_state(
     next_state_id: &mut u32,
@@ -283,10 +294,12 @@ fn create_looping_state(
 
     println!("super {:?}", current_super_states);
 
-    if from_state
-        .ndfsa_ids
-        .eq(current_super_states.get(&c).expect("non filled hash"))
-    {
+    let ndfsa_ids = current_super_states
+        .get(&c)
+        .expect("non filled hash")
+        .clone();
+
+    if from_state.ndfsa_ids.eq(&ndfsa_ids) {
         from_state.consumed_chars.push('a');
         let returned_dfsm = add_transitions_to_looping_state(
             current_super_states,
@@ -297,23 +310,12 @@ fn create_looping_state(
         );
         (None, returned_dfsm)
     } else {
-        *next_state_id += 1;
+        let mut created_looping_state =
+            IntermediateState::new(next_state_id, ndfsa_ids.clone(), vec![c], vec![]);
 
-        let mut created_looping_state = IntermediateState {
-            id: *next_state_id,
-            ndfsa_ids: current_super_states
-                .get(&c)
-                .expect("non filled hash")
-                .clone(),
-            consumed_chars: vec![c],
-            tran: vec![],
-        };
         from_state.tran.push(IntermediateTransition {
             matched: c,
-            id: current_super_states
-                .get(&c)
-                .expect("non filled hash")
-                .clone(),
+            id: ndfsa_ids,
         });
 
         let returned_dfsm = add_transitions_to_looping_state(
@@ -345,29 +347,27 @@ fn add_transitions_to_looping_state(
             .inspect(|x| println!("inspect {:?}", x))
             .find(|x| new_path_ids.eq(&x.ndfsa_ids))
         {
-            Some(d) => {
+            Some(_) => {
+                /* Dont need to create s state to loop towards as one already exists  */
                 looping_state.tran.push(IntermediateTransition {
                     matched: new_path_char,
                     id: new_path_ids.clone(),
                 });
             }
             None => {
-                returned_dfsm.push(IntermediateState {
-                    id: *next_state_id,
-                    ndfsa_ids: current_super_states
-                        .get(&looping_char)
-                        .expect("bad hash")
-                        .to_vec(),
-                    consumed_chars: vec![],
-                    tran: vec![],
-                });
-                *next_state_id += 1;
+                let ndfsa_ids = current_super_states
+                    .get(&looping_char)
+                    .expect("bad hash")
+                    .to_vec();
+                returned_dfsm.push(IntermediateState::new(
+                    next_state_id,
+                    ndfsa_ids.clone(),
+                    vec![],
+                    vec![],
+                ));
                 looping_state.tran.push(IntermediateTransition {
                     matched: new_path_char,
-                    id: current_super_states
-                        .get(&looping_char)
-                        .expect("bad hash")
-                        .to_vec(),
+                    id: ndfsa_ids,
                 });
             }
         };
