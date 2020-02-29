@@ -370,7 +370,7 @@ fn base(
 /// Checks regex is well formed other provides a (hopefully!) helpful error message
 ///
 ///
-fn check_valid_regex(regex_str: &str) -> Result<u8, &'static str> {
+fn check_valid_regex(regex_str: &str) -> Result<(), &'static str> {
     let count = regex_str.chars().count();
     if count == 0 {
         return Err("No regex");
@@ -416,7 +416,7 @@ fn check_valid_regex(regex_str: &str) -> Result<u8, &'static str> {
         }
     };
 
-    Ok(2) // have to have some return value
+    Ok(()) // have to have some return value
 }
 
 /*
