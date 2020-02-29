@@ -1,4 +1,3 @@
-use crate::ndfa::parse;
 use crate::ndfa::StateType::Branching;
 
 use crate::ndfa::Branch;
@@ -6,8 +5,7 @@ use crate::ndfa::State as NDFAState;
 use crate::ndfa::StateType;
 use crate::ndfa::StateType::Literal;
 
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{btree_map, BTreeMap, HashMap};
 
 use std::iter::FromIterator;
 
@@ -50,6 +48,10 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
         tran: vec![],
     };
 
+    for x in &ndfsm {
+        println!("{:?}", x);
+    }
+
     let mut intial_dfsm: Vec<IntermediateState> = vec![];
 
     let mut super_states: BTreeMap<char, Vec<u32>> = BTreeMap::new();
@@ -72,7 +74,7 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 
         let n_transition = IntermediateTransition {
             matched: *k,
-            id: vec![next_state_id],
+            id: v.clone(),
         };
 
         initial_state.tran.push(n_transition);
@@ -92,11 +94,18 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
     intial_dfsm.push(initial_state);
     intial_dfsm.sort_by(|a, b| a.id.cmp(&b.id));
 
-    println!(" inter {:?}", intial_dfsm);
+    for x in &intial_dfsm {
+        println!("inter {:?}", x);
+    }
 
     let dfsm = intermediate_to_final(intial_dfsm);
 
-    println!("{:?}", dfsm);
+    println!("------------final------");
+    for s in &dfsm {
+        println!("{:?}", s);
+    }
+
+    // println!("{:?}", dfsm);
 }
 fn intermediate_to_final(inter_dfsm: Vec<IntermediateState>) -> HashMap<u32, State> {
     let mut final_dfsm: HashMap<u32, State> = HashMap::new();
@@ -109,7 +118,6 @@ fn intermediate_to_final(inter_dfsm: Vec<IntermediateState>) -> HashMap<u32, Sta
             .iter()
             .map(|x| {
                 let loc = inter_dfsm.iter().position(|y| y.ndfsa_ids.eq(&x.id));
-                println!(" location {:?} {:?}", loc, x.id);
                 Transition {
                     matched: x.matched,
                     id: loc.expect("looking for intermediate dsfa that does not exist") as u32,
@@ -139,7 +147,7 @@ fn complete_intermediate_states(
 ) -> Vec<IntermediateState> {
     let mut dfsm = intial_dfsm.to_vec();
 
-    let mut returned_dfsm: Vec<IntermediateState> = vec![];
+    let mut returned_dfsm = Vec::new();
 
     println!("initial id {:?}", next_state_id);
 
@@ -155,16 +163,36 @@ fn complete_intermediate_states(
 
         let mut current_dfa = dfsm.remove(0);
 
-        let potential_searched_ids = current_dfa.ndfsa_ids.clone();
+        let potential_searched_ids = &current_dfa.ndfsa_ids.clone();
 
-        for x in &potential_searched_ids {
+        for x in potential_searched_ids {
             let current_ndfa = ndfsm
                 .get(&x)
                 .expect("intermediate dfsa looking for non existant id");
+
             if let StateType::Literal(c) = current_ndfa.matching_symbol {
                 if let Branch::StateId(i) = current_ndfa.branch {
+                    /* If a literal bracnhes leads to an internal branching mahine we have a loop  */
                     if potential_searched_ids.iter().any(|&t| t == i) {
-                        current_dfa.consumed_chars.push(c);
+                        let mut all_dfsm_vec = dfsm.clone();
+                        all_dfsm_vec.append(&mut Vec::from_iter(returned_dfsm.iter().cloned()));
+
+                        let (new_ndfsa, mut newly_created) = create_looping_state(
+                            &mut next_state_id,
+                            &mut current_dfa,
+                            &mut all_dfsm_vec,
+                            &ndfsm,
+                            i,
+                            c,
+                        );
+
+                        dfsm.append(&mut newly_created);
+
+                        println!("rdfsm {:?}", returned_dfsm);
+
+                        if let Some(new_ndfsa) = new_ndfsa {
+                            returned_dfsm.push(new_ndfsa);
+                        }
                     } else if let Branch::StateId(j) = current_ndfa.branch {
                         let current_ndfa = ndfsm.get(&j).unwrap();
                         let returned_paths = traverse(&current_ndfa, &[], &ndfsm);
@@ -181,8 +209,6 @@ fn complete_intermediate_states(
             }
         }
         for (k, v) in &super_states {
-            next_state_id += 1;
-
             /* A dfsa can represent  */
             let new_trans = IntermediateTransition {
                 matched: *k,
@@ -191,7 +217,11 @@ fn complete_intermediate_states(
 
             current_dfa.tran.push(new_trans);
 
+            /*next_dfsm_dfa_ids.iter().all(|y | x.ndfsa_ids.iter().any(| val| y == val)*/
+
             let existing_state = dfsm.iter().position(|x| x.ndfsa_ids.eq(v));
+
+            next_state_id += 1;
 
             /* if no intermediate deterministic state exists add one */
             match existing_state {
@@ -206,6 +236,143 @@ fn complete_intermediate_states(
         }
         returned_dfsm.push(current_dfa);
     }
+}
+
+fn create_looping_state(
+    next_state_id: &mut u32,
+    from_state: &mut IntermediateState,
+    existing_dfsms: &mut Vec<IntermediateState>,
+    existing_ndfsms: &HashMap<u32, NDFAState>,
+    branched_to_id: u32,
+    c: char,
+) -> (Option<IntermediateState>, Vec<IntermediateState>) {
+    let potential_searched_ids = &from_state.ndfsa_ids;
+
+    let branched_to = existing_ndfsms
+        .get(&branched_to_id)
+        .expect("branching ndfsa looking for non existant id");
+    let returned_paths = traverse(&branched_to, &[], &existing_ndfsms);
+
+    println!("traverse {:?} ", returned_paths);
+
+    let mut current_super_states: BTreeMap<char, Vec<u32>> =
+        BTreeMap::from_iter(returned_paths.into_iter());
+
+    let branching_states: Vec<u32> = potential_searched_ids
+        .clone()
+        .into_iter()
+        .filter(|y| {
+            if let StateType::Branching(_) = existing_ndfsms
+                .get(&y)
+                .expect("looking non existant branching")
+                .matching_symbol
+            {
+                true
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    for (_, v) in current_super_states.iter_mut() {
+        v.append(&mut branching_states.clone());
+
+        v.sort();
+        v.dedup();
+    }
+
+    println!("super {:?}", current_super_states);
+
+    if from_state
+        .ndfsa_ids
+        .eq(current_super_states.get(&c).expect("non filled hash"))
+    {
+        from_state.consumed_chars.push('a');
+        let returned_dfsm = add_transitions_to_looping_state(
+            current_super_states,
+            c,
+            existing_dfsms,
+            from_state,
+            next_state_id,
+        );
+        (None, returned_dfsm)
+    } else {
+        *next_state_id += 1;
+
+        let mut created_looping_state = IntermediateState {
+            id: *next_state_id,
+            ndfsa_ids: current_super_states
+                .get(&c)
+                .expect("non filled hash")
+                .clone(),
+            consumed_chars: vec![c],
+            tran: vec![],
+        };
+        from_state.tran.push(IntermediateTransition {
+            matched: c,
+            id: current_super_states
+                .get(&c)
+                .expect("non filled hash")
+                .clone(),
+        });
+
+        let returned_dfsm = add_transitions_to_looping_state(
+            current_super_states,
+            c,
+            existing_dfsms,
+            &mut created_looping_state,
+            next_state_id,
+        );
+        (Some(created_looping_state), returned_dfsm)
+    }
+}
+
+fn add_transitions_to_looping_state(
+    current_super_states: BTreeMap<char, Vec<u32>>,
+    looping_char: char,
+    existing_dfsms: &mut Vec<IntermediateState>,
+    looping_state: &mut IntermediateState,
+    next_state_id: &mut u32,
+) -> Vec<IntermediateState> {
+    let mut returned_dfsm: Vec<IntermediateState> = vec![];
+    for (new_path_char, new_path_ids) in current_super_states
+        .clone()
+        .into_iter()
+        .filter(|(k, _)| *k != looping_char)
+    {
+        match existing_dfsms
+            .iter_mut()
+            .inspect(|x| println!("inspect {:?}", x))
+            .find(|x| new_path_ids.eq(&x.ndfsa_ids))
+        {
+            Some(d) => {
+                looping_state.tran.push(IntermediateTransition {
+                    matched: new_path_char,
+                    id: new_path_ids.clone(),
+                });
+            }
+            None => {
+                returned_dfsm.push(IntermediateState {
+                    id: *next_state_id,
+                    ndfsa_ids: current_super_states
+                        .get(&looping_char)
+                        .expect("bad hash")
+                        .to_vec(),
+                    consumed_chars: vec![],
+                    tran: vec![],
+                });
+                *next_state_id += 1;
+                looping_state.tran.push(IntermediateTransition {
+                    matched: new_path_char,
+                    id: current_super_states
+                        .get(&looping_char)
+                        .expect("bad hash")
+                        .to_vec(),
+                });
+            }
+        };
+    }
+    returned_dfsm
 }
 
 fn traverse(
