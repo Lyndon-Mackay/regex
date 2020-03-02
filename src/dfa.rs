@@ -255,23 +255,22 @@ fn create_looping_state(
     let mut current_super_states: BTreeMap<char, Vec<u32>> =
         BTreeMap::from_iter(returned_paths.into_iter());
 
+    /* Get all branching states that can form a loop (do not branch too different literal machines) */
     let branching_states: Vec<u32> = potential_searched_ids
-        .clone()
-        .into_iter()
+        .iter()
         .filter(|y| {
             if let StateType::Branching(_) = existing_ndfsms
                 .get(&y)
                 .expect("looking non existant branching")
                 .machine_type
             {
-                true
+                branches_to_two_literals(existing_ndfsms.get(&y).unwrap(), existing_ndfsms)
+                    .is_none()
             } else {
                 false
             }
         })
-        .filter(|y| {
-            branches_to_two_literals(existing_ndfsms.get(y).unwrap(), existing_ndfsms).is_none()
-        })
+        .cloned()
         .collect();
 
     for (_, v) in current_super_states.iter_mut() {
@@ -286,6 +285,7 @@ fn create_looping_state(
         .expect("non filled hash")
         .clone();
 
+    /* Add transitions or looping cars then add to return queue  */
     if from_state.ndfsa_ids.eq(&ndfsa_ids) {
         from_state.looping_chars.push('a');
         let returned_dfsm = add_transitions_to_looping_state(
