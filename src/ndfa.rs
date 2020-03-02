@@ -19,7 +19,7 @@ pub enum Branch {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct State {
     pub id: u32,
-    pub matching_symbol: StateType,
+    pub machine_type: StateType,
     pub branch: Branch,
 }
 
@@ -32,7 +32,7 @@ impl State {
     fn new_literal_machine(id: u32, lit: char, branch: u32) -> State {
         State {
             id,
-            matching_symbol: StateType::Literal(lit),
+            machine_type: StateType::Literal(lit),
             branch: Branch::StateId(branch),
         }
     }
@@ -40,7 +40,7 @@ impl State {
     fn new_branching_machine(id: u32, branch_1: u32, branch_2: u32) -> State {
         State {
             id,
-            matching_symbol: StateType::Branching(Branch::StateId(branch_2)),
+            machine_type: StateType::Branching(Branch::StateId(branch_2)),
             branch: Branch::StateId(branch_1),
         }
     }
@@ -52,10 +52,10 @@ impl State {
             }
         }
 
-        if let StateType::Branching(br) = self.matching_symbol.clone() {
+        if let StateType::Branching(br) = self.machine_type.clone() {
             if let Branch::StateId(l) = br {
                 if l == final_state_id {
-                    self.matching_symbol = StateType::Branching(Branch::Finish);
+                    self.machine_type = StateType::Branching(Branch::Finish);
                 }
             }
         }
@@ -68,9 +68,9 @@ impl State {
             self.branch = Branch::StateId(l + 1);
         }
 
-        if let StateType::Branching(br) = self.matching_symbol.clone() {
+        if let StateType::Branching(br) = self.machine_type.clone() {
             if let Branch::StateId(l) = br {
-                self.matching_symbol = StateType::Branching(Branch::StateId(l + 1));
+                self.machine_type = StateType::Branching(Branch::StateId(l + 1));
             }
         }
     }
@@ -136,13 +136,13 @@ fn regex(
                             t.branch = Branch::StateId(l + 1);
                         }
                     }
-                    if let StateType::Branching(br) = t.matching_symbol.clone() {
+                    if let StateType::Branching(br) = t.machine_type.clone() {
                         if let Branch::StateId(l) = br {
                             if l == looped_state_id {
-                                t.matching_symbol =
+                                t.machine_type =
                                     StateType::Branching(Branch::StateId(result_state_id + 1));
                             } else {
-                                t.matching_symbol = StateType::Branching(Branch::StateId(l + 1));
+                                t.machine_type = StateType::Branching(Branch::StateId(l + 1));
                             }
                         }
                     }
@@ -229,7 +229,7 @@ fn factor(
             match result_current_state {
                 /* If there was a singular state no "()"s change to go after the branch state */
                 Some(mut nstate) => {
-                    if let StateType::Literal(_) = nstate.matching_symbol {
+                    if let StateType::Literal(_) = nstate.machine_type {
                         nstate.id = result_transition.next_state_id;
                         nstate.branch = Branch::StateId(group_start_id);
                     }
@@ -453,12 +453,12 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: Finish,
             },
         ];
@@ -470,22 +470,22 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Branching(StateId(3)),
+                machine_type: Branching(StateId(3)),
                 branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: StateId(1),
             },
             State {
                 id: 3,
-                matching_symbol: Literal('c'),
+                machine_type: Literal('c'),
                 branch: Finish,
             },
         ];
@@ -497,17 +497,17 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Literal('c'),
+                machine_type: Literal('c'),
                 branch: Finish,
             },
         ];
@@ -520,22 +520,22 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Branching(StateId(3)),
+                machine_type: Branching(StateId(3)),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: StateId(0),
             },
             State {
                 id: 3,
-                matching_symbol: Literal('c'),
+                machine_type: Literal('c'),
                 branch: Finish,
             },
         ];
@@ -547,12 +547,12 @@ mod test_super {
         let corrct = vec![
             State {
                 id: 0,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Branching(Finish),
+                machine_type: Branching(Finish),
                 branch: StateId(0),
             },
         ];
@@ -563,22 +563,22 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Branching(StateId(3)),
+                machine_type: Branching(StateId(3)),
                 branch: StateId(0),
             },
             State {
                 id: 3,
-                matching_symbol: Literal('c'),
+                machine_type: Literal('c'),
                 branch: Finish,
             },
         ];
@@ -590,17 +590,17 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Branching(StateId(2)),
+                machine_type: Branching(StateId(2)),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: Finish,
             },
             State {
                 id: 2,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: Finish,
             },
         ];
@@ -611,32 +611,32 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Branching(StateId(3)),
+                machine_type: Branching(StateId(3)),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: StateId(5),
             },
             State {
                 id: 3,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: StateId(4),
             },
             State {
                 id: 4,
-                matching_symbol: Literal('c'),
+                machine_type: Literal('c'),
                 branch: StateId(5),
             },
             State {
                 id: 5,
-                matching_symbol: Literal('d'),
+                machine_type: Literal('d'),
                 branch: Finish,
             },
         ];
@@ -647,32 +647,32 @@ mod test_super {
         let correct = vec![
             State {
                 id: 0,
-                matching_symbol: Branching(StateId(4)),
+                machine_type: Branching(StateId(4)),
                 branch: StateId(1),
             },
             State {
                 id: 1,
-                matching_symbol: Branching(StateId(3)),
+                machine_type: Branching(StateId(3)),
                 branch: StateId(2),
             },
             State {
                 id: 2,
-                matching_symbol: Literal('a'),
+                machine_type: Literal('a'),
                 branch: StateId(5),
             },
             State {
                 id: 3,
-                matching_symbol: Literal('b'),
+                machine_type: Literal('b'),
                 branch: StateId(5),
             },
             State {
                 id: 4,
-                matching_symbol: Literal('c'),
+                machine_type: Literal('c'),
                 branch: StateId(5),
             },
             State {
                 id: 5,
-                matching_symbol: Literal('d'),
+                machine_type: Literal('d'),
                 branch: Finish,
             },
         ];

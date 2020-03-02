@@ -18,7 +18,7 @@ struct IntermediateTransition {
 struct IntermediateState {
     id: u32,
     ndfsa_ids: Vec<u32>,
-    consumed_chars: Vec<char>, /* Chars that simply return to the current state */
+    looping_chars: Vec<char>, /* Chars that simply return to the current state */
     tran: Vec<IntermediateTransition>,
 }
 
@@ -26,13 +26,13 @@ impl IntermediateState {
     fn new(
         next_state_id: &mut u32,
         ndfsa_ids: Vec<u32>,
-        consumed_chars: Vec<char>,
+        looping_chars: Vec<char>,
         tran: Vec<IntermediateTransition>,
     ) -> IntermediateState {
         let nstate = IntermediateState {
             id: *next_state_id,
             ndfsa_ids,
-            consumed_chars,
+            looping_chars,
             tran,
         };
         *next_state_id += 1;
@@ -136,7 +136,7 @@ fn intermediate_to_final(inter_dfsm: Vec<IntermediateState>) -> HashMap<u32, Sta
             .collect::<Vec<Transition>>();
 
         let new_state = State {
-            consumed: s.consumed_chars,
+            consumed: s.looping_chars,
             tran: dfsa_trans,
         };
 
@@ -178,7 +178,7 @@ fn complete_intermediate_states(
                 .get(&x)
                 .expect("intermediate dfsa looking for non existant id");
 
-            if let StateType::Literal(c) = current_ndfa.matching_symbol {
+            if let StateType::Literal(c) = current_ndfa.machine_type {
                 if let Branch::StateId(i) = current_ndfa.branch {
                     /* If a literal bracnhes leads to an internal branching mahine we have a loop  */
                     if potential_searched_ids.iter().any(|&t| t == i) {
@@ -220,7 +220,7 @@ fn complete_intermediate_states(
             /* A dfsa can represent  */
 
             if current_dfa.ndfsa_ids.eq(v) {
-                current_dfa.consumed_chars.push(*k);
+                current_dfa.looping_chars.push(*k);
             } else {
                 let new_trans = IntermediateTransition {
                     matched: *k,
@@ -280,7 +280,7 @@ fn create_looping_state(
             if let StateType::Branching(_) = existing_ndfsms
                 .get(&y)
                 .expect("looking non existant branching")
-                .matching_symbol
+                .machine_type
             {
                 true
             } else {
@@ -307,7 +307,7 @@ fn create_looping_state(
         .clone();
 
     if from_state.ndfsa_ids.eq(&ndfsa_ids) {
-        from_state.consumed_chars.push('a');
+        from_state.looping_chars.push('a');
         let returned_dfsm = add_transitions_to_looping_state(
             current_super_states,
             c,
@@ -387,13 +387,13 @@ fn branches_to_two_literals<'a>(
     ndfsm: &'a HashMap<u32, NDFAState>,
 ) -> Option<(&'a NDFAState, &'a NDFAState)> {
     if_chain! {
-        if let StateType::Branching(b) = &ndfa_state.matching_symbol;
+        if let StateType::Branching(b) = &ndfa_state.machine_type;
         if let Branch::StateId(state_id1) = ndfa_state.branch;
         if let Branch::StateId(state_id2) = b;
         if let Some(branched_to_1) = ndfsm.get(&state_id1);
         if let Some(branched_to_2) = ndfsm.get(&state_id2);
-        if let StateType::Literal(_) = branched_to_1.matching_symbol;
-        if let StateType::Literal(_) = branched_to_2.matching_symbol;
+        if let StateType::Literal(_) = branched_to_1.machine_type;
+        if let StateType::Literal(_) = branched_to_2.machine_type;
         if branched_to_1.id != branched_to_2.id;
         then {
            return Some((branched_to_1,branched_to_2))
@@ -407,7 +407,7 @@ fn traverse(
     prev_states: &[u32],
     ndfsm: &HashMap<u32, NDFAState>,
 ) -> Vec<(char, Vec<u32>)> {
-    match &current_ndfa.matching_symbol {
+    match &current_ndfa.machine_type {
         Literal(l) => {
             let mut traversed_states = prev_states
                 .to_vec()
