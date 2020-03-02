@@ -218,26 +218,30 @@ fn complete_intermediate_states(
         }
         for (k, v) in &super_states {
             /* A dfsa can represent  */
-            let new_trans = IntermediateTransition {
-                matched: *k,
-                id: v.clone(),
-            };
 
-            current_dfa.tran.push(new_trans);
+            if current_dfa.ndfsa_ids.eq(v) {
+                current_dfa.consumed_chars.push(*k);
+            } else {
+                let new_trans = IntermediateTransition {
+                    matched: *k,
+                    id: v.clone(),
+                };
+                current_dfa.tran.push(new_trans);
+                let existing_state = dfsm
+                    .iter()
+                    .chain(returned_dfsm.iter())
+                    .position(|x| x.ndfsa_ids.eq(v));
 
-            /*next_dfsm_dfa_ids.iter().all(|y | x.ndfsa_ids.iter().any(| val| y == val)*/
-
-            let existing_state = dfsm.iter().position(|x| x.ndfsa_ids.eq(v));
-
-            /* if no intermediate deterministic state exists add one */
-            match existing_state {
-                Some(_) => (),
-                None => dfsm.push(IntermediateState::new(
-                    &mut next_state_id,
-                    v.clone(),
-                    vec![],
-                    vec![],
-                )),
+                /* if no intermediate deterministic state exists add one */
+                match existing_state {
+                    Some(_) => (),
+                    None => dfsm.push(IntermediateState::new(
+                        &mut next_state_id,
+                        v.clone(),
+                        vec![],
+                        vec![],
+                    )),
+                }
             }
         }
         returned_dfsm.push(current_dfa);
@@ -282,6 +286,9 @@ fn create_looping_state(
             } else {
                 false
             }
+        })
+        .filter(|y| {
+            branches_to_two_literals(existing_ndfsms.get(y).unwrap(), existing_ndfsms).is_none()
         })
         .collect();
 
@@ -375,6 +382,26 @@ fn add_transitions_to_looping_state(
     returned_dfsm
 }
 
+fn branches_to_two_literals<'a>(
+    ndfa_state: &'a NDFAState,
+    ndfsm: &'a HashMap<u32, NDFAState>,
+) -> Option<(&'a NDFAState, &'a NDFAState)> {
+    if_chain! {
+        if let StateType::Branching(b) = &ndfa_state.matching_symbol;
+        if let Branch::StateId(state_id1) = ndfa_state.branch;
+        if let Branch::StateId(state_id2) = b;
+        if let Some(branched_to_1) = ndfsm.get(&state_id1);
+        if let Some(branched_to_2) = ndfsm.get(&state_id2);
+        if let StateType::Literal(_) = branched_to_1.matching_symbol;
+        if let StateType::Literal(_) = branched_to_2.matching_symbol;
+        if branched_to_1.id != branched_to_2.id;
+        then {
+           return Some((branched_to_1,branched_to_2))
+        }
+    }
+    None
+}
+
 fn traverse(
     current_ndfa: &NDFAState,
     prev_states: &[u32],
@@ -382,7 +409,11 @@ fn traverse(
 ) -> Vec<(char, Vec<u32>)> {
     match &current_ndfa.matching_symbol {
         Literal(l) => {
-            let mut traversed_states = prev_states.to_vec();
+            let mut traversed_states = prev_states
+                .to_vec()
+                .into_iter()
+                .filter(|x| branches_to_two_literals(ndfsm.get(x).unwrap(), ndfsm).is_none())
+                .collect::<Vec<u32>>();
             traversed_states.push(current_ndfa.id);
             vec![(*l, traversed_states)]
         }

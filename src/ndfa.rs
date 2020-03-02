@@ -215,11 +215,13 @@ fn factor(
             /*
              * The new branching state will be inserted before previous machine
              */
-            let new_branch = State::new_branching_machine(
-                group_start_id,
-                group_start_id + 1,
-                result_transition.next_state_id + 1,
-            );
+
+            let final_state_id = result_transition.next_state_id + 1;
+
+            let new_branch =
+                State::new_branching_machine(group_start_id, group_start_id + 1, final_state_id);
+
+            println!("{:?}", new_branch);
 
             /*
              * Actions now set the states repeated by the encolsure
@@ -238,26 +240,30 @@ fn factor(
                     /* increament ids and states bracnhed to by 1 to make room for every sate that is going to be in front of the new branching machine */
                     result_states = result_states
                         .into_iter()
+                        .inspect(|x| println!("Before mapping {:?}", x))
                         .map(|x| {
                             if x.id >= group_start_id {
                                 let mut res = x;
                                 res.increment_states();
+                                if let Branch::StateId(n) = res.branch {
+                                    if n == final_state_id {
+                                        res.branch = Branch::StateId(group_start_id);
+                                    }
+                                }
+
                                 res
                             } else {
                                 x
                             }
                         })
+                        .inspect(|x| println!("After mapping {:?}", x))
                         .collect::<Vec<State>>();
                 }
             }
 
             result_states.push(new_branch);
 
-            Some((
-                result_states,
-                &result_chars[1..],
-                result_transition.next_state_id + 1,
-            ))
+            Some((result_states, &result_chars[1..], final_state_id))
         }
         Some('+') => {
             /*
@@ -525,7 +531,7 @@ mod test_super {
             State {
                 id: 2,
                 matching_symbol: Literal('b'),
-                branch: StateId(3),
+                branch: StateId(0),
             },
             State {
                 id: 3,

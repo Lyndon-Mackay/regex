@@ -6,6 +6,9 @@ use crate::ndfa::parse;
 
 use std::env;
 
+#[macro_use]
+extern crate if_chain;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
