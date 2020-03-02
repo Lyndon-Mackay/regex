@@ -221,8 +221,6 @@ fn factor(
             let new_branch =
                 State::new_branching_machine(group_start_id, group_start_id + 1, final_state_id);
 
-            println!("{:?}", new_branch);
-
             /*
              * Actions now set the states repeated by the encolsure
              */
@@ -240,7 +238,6 @@ fn factor(
                     /* increament ids and states bracnhed to by 1 to make room for every sate that is going to be in front of the new branching machine */
                     result_states = result_states
                         .into_iter()
-                        .inspect(|x| println!("Before mapping {:?}", x))
                         .map(|x| {
                             if x.id >= group_start_id {
                                 let mut res = x;
@@ -256,7 +253,6 @@ fn factor(
                                 x
                             }
                         })
-                        .inspect(|x| println!("After mapping {:?}", x))
                         .collect::<Vec<State>>();
                 }
             }
@@ -286,7 +282,6 @@ fn factor(
             };
 
             result_states.push(new_branch);
-            println!("{:?}", result_states);
 
             Some((
                 result_states,

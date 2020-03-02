@@ -60,10 +60,6 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
     //initial state for dfa
     let mut initial_state = IntermediateState::new(&mut next_state_id, vec![], vec![], vec![]);
 
-    for x in &ndfsm {
-        println!("{:?}", x);
-    }
-
     let mut intial_dfsm: Vec<IntermediateState> = vec![];
 
     let mut super_states: BTreeMap<char, Vec<u32>> = BTreeMap::new();
@@ -89,8 +85,6 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
 
         initial_state.tran.push(n_transition);
 
-        println!("{:?} {:?} ", k, v);
-
         intial_dfsm.push(IntermediateState::new(
             &mut next_state_id,
             v.clone(),
@@ -98,15 +92,10 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
             vec![],
         ));
     }
-    println!();
     intial_dfsm = complete_intermediate_states(&mut next_state_id, &intial_dfsm, &ndfsm);
 
     intial_dfsm.push(initial_state);
     intial_dfsm.sort_by(|a, b| a.id.cmp(&b.id));
-
-    for x in &intial_dfsm {
-        println!("inter {:?}", x);
-    }
 
     let dfsm = intermediate_to_final(intial_dfsm);
 
@@ -159,11 +148,8 @@ fn complete_intermediate_states(
 
     let mut returned_dfsm = Vec::new();
 
-    println!("initial id {:?}", next_state_id);
-
     loop {
         if dfsm.is_empty() {
-            println!("return");
             return returned_dfsm;
         }
 
@@ -195,8 +181,6 @@ fn complete_intermediate_states(
                         );
 
                         dfsm.append(&mut newly_created);
-
-                        println!("rdfsm {:?}", returned_dfsm);
 
                         if let Some(new_ndfsa) = new_ndfsa {
                             returned_dfsm.push(new_ndfsa);
@@ -268,8 +252,6 @@ fn create_looping_state(
         .expect("branching ndfsa looking for non existant id");
     let returned_paths = traverse(&branched_to, &[], &existing_ndfsms);
 
-    println!("traverse {:?} ", returned_paths);
-
     let mut current_super_states: BTreeMap<char, Vec<u32>> =
         BTreeMap::from_iter(returned_paths.into_iter());
 
@@ -298,8 +280,6 @@ fn create_looping_state(
         v.sort();
         v.dedup();
     }
-
-    println!("super {:?}", current_super_states);
 
     let ndfsa_ids = current_super_states
         .get(&c)
@@ -351,7 +331,6 @@ fn add_transitions_to_looping_state(
     {
         match existing_dfsms
             .iter_mut()
-            .inspect(|x| println!("inspect {:?}", x))
             .find(|x| new_path_ids.eq(&x.ndfsa_ids))
         {
             Some(_) => {
