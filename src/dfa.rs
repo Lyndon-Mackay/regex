@@ -40,7 +40,7 @@ impl IntermediateState {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct Transition {
     matched: char,
     id: u32,
@@ -54,7 +54,7 @@ struct State {
 
 pub fn convert(ndfsm: Vec<NDFAState>) {
     let ndfsm: HashMap<u32, NDFAState> = HashMap::from_iter(ndfsm.into_iter().map(|x| (x.id, x)));
-    let fst_ndfa_state = ndfsm.get(&0).unwrap().clone();
+    let fst_ndfa_state = *ndfsm.get(&0).unwrap();
 
     let mut next_state_id = 0;
     //initial state for dfa

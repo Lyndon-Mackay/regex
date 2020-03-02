@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StateType {
     Literal(char),
     Branching(Branch),
@@ -9,14 +9,14 @@ struct Transition {
     start_group_id: Option<u32>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Branch {
     StateId(u32),
     Finish,
 }
 
 /// single state in a ndfa with an id that should be unqiue but no effort is made to enforce this
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct State {
     pub id: u32,
     pub machine_type: StateType,
@@ -52,7 +52,7 @@ impl State {
             }
         }
 
-        if let StateType::Branching(br) = self.machine_type.clone() {
+        if let StateType::Branching(br) = self.machine_type {
             if let Branch::StateId(l) = br {
                 if l == final_state_id {
                     self.machine_type = StateType::Branching(Branch::Finish);
@@ -68,7 +68,7 @@ impl State {
             self.branch = Branch::StateId(l + 1);
         }
 
-        if let StateType::Branching(br) = self.machine_type.clone() {
+        if let StateType::Branching(br) = self.machine_type {
             if let Branch::StateId(l) = br {
                 self.machine_type = StateType::Branching(Branch::StateId(l + 1));
             }
@@ -136,7 +136,7 @@ fn regex(
                             t.branch = Branch::StateId(l + 1);
                         }
                     }
-                    if let StateType::Branching(br) = t.machine_type.clone() {
+                    if let StateType::Branching(br) = t.machine_type {
                         if let Branch::StateId(l) = br {
                             if l == looped_state_id {
                                 t.machine_type =
