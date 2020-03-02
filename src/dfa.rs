@@ -389,9 +389,9 @@ fn traverse(
     match &current_ndfa.machine_type {
         Literal(l) => {
             let mut traversed_states = prev_states
-                .to_vec()
-                .into_iter()
+                .iter()
                 .filter(|x| branches_to_two_literals(ndfsm.get(x).unwrap(), ndfsm).is_none())
+                .cloned()
                 .collect::<Vec<u32>>();
             traversed_states.push(current_ndfa.id);
             vec![(*l, traversed_states)]
