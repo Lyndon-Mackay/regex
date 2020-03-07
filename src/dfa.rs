@@ -47,12 +47,18 @@ struct Transition {
 }
 
 #[derive(Debug)]
-struct State {
+pub struct State {
     consumed: Vec<char>,
     tran: Vec<Transition>,
 }
 
-pub fn convert(ndfsm: Vec<NDFAState>) {
+pub fn create(regex_str: &str) -> HashMap<u32, State> {
+    let fsm = parse(regex_str).expect("error:");
+
+    convert(fsm)
+}
+
+fn convert(ndfsm: Vec<NDFAState>) -> HashMap<u32, State> {
     let ndfsm: HashMap<u32, NDFAState> = HashMap::from_iter(ndfsm.into_iter().map(|x| (x.id, x)));
     let fst_ndfa_state = *ndfsm.get(&0).unwrap();
 
@@ -104,6 +110,8 @@ pub fn convert(ndfsm: Vec<NDFAState>) {
         println!("{:?}", s);
     }
 
+    dfsm
+
     // println!("{:?}", dfsm);
 }
 fn intermediate_to_final(inter_dfsm: Vec<IntermediateState>) -> HashMap<u32, State> {
@@ -144,18 +152,18 @@ fn complete_intermediate_states(
     intial_dfsm: &[IntermediateState],
     ndfsm: &HashMap<u32, NDFAState>,
 ) -> Vec<IntermediateState> {
-    let mut dfsm = intial_dfsm.to_vec();
+    let mut dfsm_queue = intial_dfsm.to_vec();
 
     let mut returned_dfsm = Vec::new();
 
     loop {
-        if dfsm.is_empty() {
+        if dfsm_queue.is_empty() {
             return returned_dfsm;
         }
 
         let mut super_states: BTreeMap<char, Vec<u32>> = BTreeMap::new();
 
-        let mut current_dfa = dfsm.remove(0);
+        let mut current_dfa = dfsm_queue.remove(0);
 
         let potential_searched_ids = &current_dfa.ndfsa_ids.clone();
 
@@ -168,7 +176,7 @@ fn complete_intermediate_states(
                 if let Branch::StateId(i) = current_ndfa.branch {
                     /* If a literal bracnhes leads to an internal branching mahine we have a loop  */
                     if potential_searched_ids.iter().any(|&t| t == i) {
-                        let mut all_dfsm_vec = dfsm.clone();
+                        let mut all_dfsm_vec = dfsm_queue.clone();
                         all_dfsm_vec.append(&mut Vec::from_iter(returned_dfsm.iter().cloned()));
 
                         let (new_ndfsa, mut newly_created) = create_looping_state(
@@ -180,7 +188,7 @@ fn complete_intermediate_states(
                             c,
                         );
 
-                        dfsm.append(&mut newly_created);
+                        dfsm_queue.append(&mut newly_created);
 
                         if let Some(new_ndfsa) = new_ndfsa {
                             returned_dfsm.push(new_ndfsa);
@@ -211,7 +219,7 @@ fn complete_intermediate_states(
                     id: v.clone(),
                 };
                 current_dfa.tran.push(new_trans);
-                let existing_state = dfsm
+                let existing_state = dfsm_queue
                     .iter()
                     .chain(returned_dfsm.iter())
                     .position(|x| x.ndfsa_ids.eq(v));
@@ -219,7 +227,7 @@ fn complete_intermediate_states(
                 /* if no intermediate deterministic state exists add one */
                 match existing_state {
                     Some(_) => (),
-                    None => dfsm.push(IntermediateState::new(
+                    None => dfsm_queue.push(IntermediateState::new(
                         &mut next_state_id,
                         v.clone(),
                         vec![],
@@ -316,6 +324,10 @@ fn create_looping_state(
     }
 }
 
+/**
+  Adds all tranisitions to looping states
+  these include transitions away from the looping state
+*/
 fn add_transitions_to_looping_state(
     current_super_states: BTreeMap<char, Vec<u32>>,
     looping_char: char,
@@ -361,10 +373,12 @@ fn add_transitions_to_looping_state(
     returned_dfsm
 }
 
+/** Check if branch maps to two seperate literals */
 fn branches_to_two_literals<'a>(
     ndfa_state: &'a NDFAState,
     ndfsm: &'a HashMap<u32, NDFAState>,
 ) -> Option<(&'a NDFAState, &'a NDFAState)> {
+    /* Using imoorted macro if chain this prevents excessive drfiting to the right or a pyramid of doom */
     if_chain! {
         if let StateType::Branching(b) = &ndfa_state.machine_type;
         if let Branch::StateId(state_id1) = ndfa_state.branch;
@@ -381,6 +395,10 @@ fn branches_to_two_literals<'a>(
     None
 }
 
+/** Returns the literals that can be reached from current FDA with the excepion of
+   branches that map to two different literals as they should be replaced with
+   a direct path to the unique literal
+*/
 fn traverse(
     current_ndfa: &NDFAState,
     prev_states: &[u32],
