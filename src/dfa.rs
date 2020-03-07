@@ -181,8 +181,10 @@ fn complete_intermediate_states(
                 .get(&x)
                 .expect("intermediate dfsa looking for non existant id");
 
-            if let StateType::Literal(c) = current_ndfa.machine_type {
-                if let Branch::StateId(i) = current_ndfa.branch {
+            if_chain! {
+                if let StateType::Literal(c) = current_ndfa.machine_type ;
+                if let Branch::StateId(i) = current_ndfa.branch ;
+                then {
                     /* If a literal bracnhes leads to an internal branching mahine we have a loop  */
                     if potential_searched_ids.iter().any(|&t| t == i) {
                         let mut all_dfsm_vec = dfsm_queue.clone();
@@ -427,16 +429,21 @@ fn traverse(
             let mut prev_vec = prev_states.to_vec();
             prev_vec.push(current_ndfa.id);
             let mut rvec = vec![];
-            if let Branch::StateId(i) = current_ndfa.branch {
-                if !(prev_states.iter().any(|&x| x == i)) {
+
+            if_chain! {
+                if let Branch::StateId(i) = current_ndfa.branch;
+                if !(prev_states.iter().any(|&x| x == i));
+                then {
                     let nstate = ndfsm
                         .get(&i)
                         .expect("intermediate dfsa looking for non existant id");
                     rvec.append(&mut traverse(nstate, &prev_vec, ndfsm));
                 }
             }
-            if let Branch::StateId(i) = br {
-                if !(prev_states.iter().any(|&x| x == *i)) {
+            if_chain! {
+                if let Branch::StateId(i) = br;
+                if !(prev_states.iter().any(|&x| x == *i));
+                  then {
                     let nstate = ndfsm
                         .get(&i)
                         .expect("intermediate dfsa looking for non existant id");
