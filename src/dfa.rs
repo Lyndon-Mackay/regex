@@ -40,21 +40,21 @@ impl IntermediateState {
     }
 }
 #[derive(Debug, Clone, Copy)]
-struct StateChange {
-    matched: char,
-    id: u32,
+pub struct StateChange {
+    pub matched: char,
+    pub id: u32,
 }
 
 #[derive(Debug, Clone)]
-enum Transition {
+pub enum Transition {
     NextStates(Vec<StateChange>),
     Finish,
 }
 
 #[derive(Debug)]
 pub struct State {
-    looping_chars: Vec<char>,
-    tran: Transition,
+    pub looping_chars: Vec<char>,
+    pub tran: Transition,
 }
 
 pub fn create(regex_str: &str) -> HashMap<u32, State> {
@@ -108,14 +108,7 @@ fn convert(ndfsm: Vec<NDFAState>) -> HashMap<u32, State> {
     intial_dfsm.push(initial_state);
     intial_dfsm.sort_by(|a, b| a.id.cmp(&b.id));
 
-    let dfsm = intermediate_to_final(intial_dfsm);
-
-    println!("------------final------");
-    for s in &dfsm {
-        println!("{:?}", s);
-    }
-
-    dfsm
+    intermediate_to_final(intial_dfsm)
 
     // println!("{:?}", dfsm);
 }

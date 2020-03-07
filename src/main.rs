@@ -1,7 +1,9 @@
 mod dfa;
 mod ndfa;
+mod search;
 
 use crate::dfa::create;
+use crate::search::find_matching;
 
 use std::env;
 
@@ -20,4 +22,10 @@ fn main() {
     let regex_str = &args[1];
 
     let dfsm = create(regex_str);
+
+    let found = find_matching("aaaabd\nacd\na", dfsm);
+
+    for x in found {
+        println!("{}", x);
+    }
 }
