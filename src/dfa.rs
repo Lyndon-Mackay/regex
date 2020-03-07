@@ -39,17 +39,22 @@ impl IntermediateState {
         nstate
     }
 }
-
 #[derive(Debug, Clone, Copy)]
-struct Transition {
+struct StateChange {
     matched: char,
     id: u32,
 }
 
+#[derive(Debug, Clone)]
+enum Transition {
+    NextStates(Vec<StateChange>),
+    Finish,
+}
+
 #[derive(Debug)]
 pub struct State {
-    consumed: Vec<char>,
-    tran: Vec<Transition>,
+    looping_chars: Vec<char>,
+    tran: Transition,
 }
 
 pub fn create(regex_str: &str) -> HashMap<u32, State> {
@@ -125,21 +130,32 @@ fn intermediate_to_final(inter_dfsm: Vec<IntermediateState>) -> HashMap<u32, Sta
             .iter()
             .map(|x| {
                 let loc = inter_dfsm.iter().position(|y| y.ndfsa_ids.eq(&x.id));
-                Transition {
+                StateChange {
                     matched: x.matched,
                     id: loc.expect("looking for intermediate dsfa that does not exist") as u32,
                 }
             })
-            .collect::<Vec<Transition>>();
+            .collect::<Vec<StateChange>>();
 
         let new_state = State {
-            consumed: s.looping_chars,
-            tran: dfsa_trans,
+            looping_chars: s.looping_chars,
+            tran: Transition::NextStates(dfsa_trans),
         };
 
         final_dfsm.insert(next_state_id, new_state);
         next_state_id += 1;
     }
+
+    for (_, x) in final_dfsm.iter_mut() {
+        if_chain! {
+            if let Transition::NextStates(l) = &x.tran;
+            if l.is_empty();
+            then {
+                x.tran = Transition::Finish;
+            }
+        }
+    }
+
     final_dfsm
 }
 
